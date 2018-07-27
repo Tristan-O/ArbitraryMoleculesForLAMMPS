@@ -56,46 +56,20 @@ def BeadWall():
     ''' Position of Interface '''
     Rc = 10.
     ''' Distance Maximum '''
-    xmax = 2.**(1./6.)*Rc+1 # ***********************************************************************************************************************************
+    xmax = 2.**(1./6.)*Rc+3 # ***********************************************************************************************************************************
     NumberXpts = 10000
     
     ''' LJ Parameters '''
-    # LJ 9-3
-    E1 = 1E-2
-    sigma1 = 17.
-    rcut93 = (0.4)**(1/6)*sigma1
     # LJ 12-6
-    E2 = 1E-4
-    sigma2 = Rc / (2.**(1./6.))# 16 
-    rcut126 = (2.**(1./6.))*sigma2
-#shift = 
-    #rcut126 = sigma2
-    #rcut126 = 12
-    # Colloid 
-    # E3 = 4*pi^2*rho_wall*rho_colloid*epsilon*sigma^6 (where epsilon and simga are LJ parameters)
-    E3 = 1E9
-    sigma3 = 8.
-    rcutcolloid = xmax
-    # Harmonic
-    E4 = 120
-    rcut = Rc + 1.25
-    sigma = 1. 
-    
-    ''' Yukawa '''
-    E5 = 1E1
-    kappa = 0.08
-    rcutyukawa = Rc + 5
-    
-    
-    
-    
+    E = 1E-4
+    sigma = Rc / (2.**(1./6.))# 16 
+    rcut126 = (2.**(1./6.))*sigma
+   
     y = np.linspace(0.0001,xmax,NumberXpts)
+    y1 = np.linspace(0.0001,Rc,NumberXpts)
     Integrand = []
-    LJ93 = []
     LJ126 = []
-    Colloid = []
-    Harmonic = []
-    Yukawa = []
+
     # prefactor1 = Excee/2.0
     # prefactor2 has a factor of 2 when integration was changed
     # from (-Inf,Inf) to [0,Inf)
@@ -110,92 +84,38 @@ def BeadWall():
         temp1 = prefactor*temp[0]
         #print temp1
         Integrand.append(temp1)
-        
-        ''' Harmonic Interaction '''
-        temp5 = E4*(i-rcut)**2
-        if i > rcut:
-            Harmonic.append(0)
-        else:
-            Harmonic.append(temp5)
-        
-   
-    y1 = np.linspace(0.0001,xmax,NumberXpts)
+
     for i in y1:
-        ''' LJ-9/3 Interaction '''
-        r93min = (2/5.)**(0.16667)
-        r1 = (sigma1/i)**3
-        r2 = (sigma1/i)**9
-        r1min = (sigma1/rcut93)**3
-        r2min = (sigma1/rcut93)**9
-        #print r93min
-        if i > rcut93:
-            temp2 = 0.
-        else: 
-            temp2 = E1*(2*r2/15 - r1) - E1*(2*r2min/15 - r1min)
-        LJ93.append(temp2)
-        
         ''' LJ-12/6 Interaction '''
         r126min = 2.0**(0.16667)
         #print r126min
         if i > rcut126:
-            temp3= 0.
+            break
         else:
-            temp3 = 4*E2*(((i)/sigma2)**(-12) - ((i)/sigma2)**(-6)) - 4*E2*((((rcut126)/sigma2)**(-12) - (((rcut126)/sigma2)**(-6))))
+            temp3 = 4*E*(((i)/sigma)**(-12) - ((i)/sigma)**(-6)) - 4*E*((((rcut126)/sigma)**(-12) - (((rcut126)/sigma)**(-6))))
         LJ126.append(temp3)
         
-        ''' Colloid Interaction '''
-        if i > rcutcolloid:
-            temp4 = 0.
-        else:
-            i2 = i + sigma3/2
-            temp4 = E3*( sigma**6./7560*((6*sigma3/2-i2)/i2**7 + (i2+8.*sigma3/2)/(i2+2.*sigma3/2)**7) - 1/6*((2.*sigma3/2.*(i2+sigma3/2)+i2*(i2+2.*sigma3/2)*(np.log(i2)-np.log(i2+2.*sigma3/2)))/(i2*(i2+2.*sigma3/2))) )
-        Colloid.append(temp4)
-        
-        ''' Yukawa Interaction '''
-        if i > rcutyukawa:
-            temp5 = 0.
-        else:
-            temp5 = E5*np.exp(-1*kappa*i)/i - E5*np.exp(-1*kappa*rcutyukawa)/rcutyukawa
-        Yukawa.append(temp5)
+
         
     # Calculate second excluded volume
     int1 = []
-    int2 = []
     int3 = []
-    int4 = []
+    
     for i in Integrand:
         temp1 = (1-np.exp(-1*i))
         #print temp1
         int1.append(temp1)
-    for i in Harmonic:
-        temp2 = (1-np.exp(-1*i))
-        #print temp2
-        int2.append(temp2)
     for i in LJ126:
         temp3 = (1-np.exp(-1*i))
         int3.append(temp3)
-    for i in Yukawa:
-        temp5 = (1-np.exp(-1*i))
-        int4.append(temp5)
         
         
     IntBeadWall = sp.integrate.simps(int1,y)
     print "Exc. Vol. Bead-Wall"
-    print IntBeadWall
-    IntHarmonic = sp.integrate.simps(int2,y)
-    print "Exc. Vol. Harmonic"
-    print IntHarmonic
+    print IntBeadWall 
     IntLJ126 = sp.integrate.simps(int3,y1)
     print "Exc. Vol. LJ-12/6"
     print IntLJ126
-    IntYukawa = sp.integrate.simps(int4,y1)
-    print "Exc. Vol. Yukawa"
-    print IntYukawa
-        
-        
-    y1 = y1
-    y2 = y1
-    y3 = y1 + Rc
 
     index = np.arange(1,np.shape(y1)[0]+1, dtype=int)
     with open('BeadWallInteraction.txt', 'w') as f:
@@ -208,14 +128,14 @@ def BeadWall():
             f.write('%i %f %E %E\n' % (index[i], y[i], Integrand[i], force[i]))
 
     with open('BeadWallLJ126.txt', 'w') as f:
-        f.write("#E2="+str(E2)+" " +"sigma="+str(sigma)+"\n")
+        f.write("#E="+str(E)+" " +"sigma="+str(sigma)+"\n")
         f.write("LJ126\n")
-        f.write("N "+str(NumberXpts)+" R " + str(y2[0]) + " " + str(y2[-1]) + "\n")
+        f.write("N "+str(len(y1))+" R " + str(y1[0]) + " " + str(y1[-1]) + "\n")
         f.write('\n')
 
-        force = findForce(y2,LJ126)
+        force = findForce(y1,LJ126)
         for i in range(len(index)):
-            f.write('%i %f %E %E\n' % (index[i], y2[i], LJ126[i], force[i]))
+            f.write('%i %f %E %E\n' % (index[i], y1[i], LJ126[i], force[i]))
 
     
     plt.plot(y,Integrand,'b-', y1,LJ126, 'r-')
