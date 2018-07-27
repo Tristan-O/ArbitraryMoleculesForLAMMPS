@@ -56,7 +56,7 @@ def BeadWall():
     ''' Position of Interface '''
     Rc = 10.
     ''' Distance Maximum '''
-    xmax = 2.**(1./6.)*Rc # ***********************************************************************************************************************************
+    xmax = 2.**(1./6.)*Rc+1 # ***********************************************************************************************************************************
     NumberXpts = 10000
     
     ''' LJ Parameters '''
@@ -66,7 +66,7 @@ def BeadWall():
     rcut93 = (0.4)**(1/6)*sigma1
     # LJ 12-6
     E2 = 1E-4
-    sigma2 = Rc / (2.**(1./6.))# 16 ********* I DON'T KNOW IF I WAS SUPPOSED TO ACTUALLY SHIFT THIS POTENTIAL OVER OR JUST CHANGE SIGMA SO IT GOES TO ZERO AT THE RIGHT SPOT *************
+    sigma2 = Rc / (2.**(1./6.))# 16 
     rcut126 = (2.**(1./6.))*sigma2
 #shift = 
     #rcut126 = sigma2
@@ -198,17 +198,6 @@ def BeadWall():
     y3 = y1 + Rc
 
     index = np.arange(1,np.shape(y1)[0]+1, dtype=int)
-
-
-    # AlignedWallBead = np.column_stack((index,y,Integrand,findForce(y, Integrand)))
-
-    # AlignedLJ93 = np.column_stack((index,y1,LJ93,findForce(y1, LJ93)))
-    # AlignedLJ126 = np.column_stack((index,y2,LJ126,findForce(y2, LJ126)))
-    # AlignedColloid = np.column_stack((index,y3,Colloid,findForce(y3, Colloid)))
-    # AlignedHarmonic = np.column_stack((index,y,Harmonic,findForce(y, Harmonic)))
-    # AlignedYukawa = np.column_stack((index,y1,Yukawa, findForce(y1,Yukawa)))
-
-    #np.savetxt("WallBeadInteraction.txt", AlignedWallBead, header="#Excee="+str(Excee)+" " +"a="+str(a)+" " +"dw="+str(dw)+" " +"x0="+str(x0)+"\nTANH_PAIR_POTENTIAL\nN "+str(NumberXpts)+"\n")
     with open('BeadWallInteraction.txt', 'w') as f:
         f.write("#Excee="+str(Excee)+" " +"a="+str(a)+" " +"dw="+str(dw)+" " +"Rc="+str(Rc)+"\n")
         f.write("TANH\n")
@@ -218,8 +207,6 @@ def BeadWall():
         for i in range(len(index)):
             f.write('%i %f %E %E\n' % (index[i], y[i], Integrand[i], force[i]))
 
-    #np.savetxt("WallBeadLJ93.txt", AlignedLJ93, header="#E1="+str(E1)+" " +"sigma="+str(sigma))
-    #np.savetxt("WallBeadLJ126.txt", AlignedLJ126, header="E2="+str(E2)+" " +"sigma="+str(sigma)+"\nLJ12-6_PAIR_POTENTIAL\nN "+str(NumberXpts)+"\n")
     with open('BeadWallLJ126.txt', 'w') as f:
         f.write("#E2="+str(E2)+" " +"sigma="+str(sigma)+"\n")
         f.write("LJ126\n")
@@ -229,95 +216,14 @@ def BeadWall():
         force = findForce(y2,LJ126)
         for i in range(len(index)):
             f.write('%i %f %E %E\n' % (index[i], y2[i], LJ126[i], force[i]))
-    # np.savetxt("WallBeadColloid.txt", AlignedColloid, header="E3="+str(E3)+" " +"sigma="+str(sigma))
-    # np.savetxt("WallBeadHarmonic.txt", AlignedHarmonic, header="E4="+str(E4)+" " +"rcut="+str(rcut))
-    # np.savetxt("WallBeadYukawa.txt", AlignedHarmonic, header="E4="+str(E4)+" " +"rcut="+str(rcut))
+
     
     plt.plot(y,Integrand,'b-', y1,LJ126, 'r-')
     plt.ylim(0,Integrand[0]*1.5)
     plt.xlim((0,xmax))
     plt.savefig('TANH_ColloidInt_And_LJ126_Colloid-AtomInt.png')
     plt.close()
-    # plt.title('Interface-Bead Interaction Integrand')
-    # plt.ylabel('$W/k_bT$')
-    # plt.xlabel("$h [b_s/6^{0.5}]$")
-    # plt.savefig('Interface-Bead Interaction.png')
-    # plt.savefig('Interface-Bead Interaction')
-    # plt.close()
-    
-    # plt.plot(y,Integrand,'-',y1,LJ93,'b-',y2,LJ126,'r-',y3,Colloid,'g-',y,Harmonic,'y-',y1,Yukawa,'k-')
-    # # plt.ylim(-0.1*Excee,(Excee+0.1*Excee))
-    # # plt.xlim((0,xmax))
-    # plt.title('Interface-Bead Interaction')
-    # plt.ylabel('$W/k_bT$')
-    # plt.xlabel("$h [b_s/6^{0.5}]$")
-    # #plt.setp(linewidth=3.0)
-    # plt.legend(('Compressibility'+" "+"$\epsilon= $"+str(Excee)+"\n"+" "+"a="+str(a)+" "+"$d_w=$"+str(dw),'LJ-9/3'+" "+"$\epsilon= $"+str(E1),'LJ-12/6'+" "+"$\epsilon= $"+str(E2),'colloid'+" "+"$\epsilon= $"+str(E3),'harmonic'+" "+"$\epsilon= $"+str(E4)+"\n"+"rcut="+str(rcut),'yukawa'+" "+"$\epsilon= $"+str(E5)+"\n"+"rcut="+str(rcutyukawa)+"kappa="+str(kappa)))
-    # plt.savefig('Interface-Bead Interaction & LJ.png')
-    # plt.savefig('Interface-Bead Interaction & LJ')
-    # plt.close()
-    
-    # plt.plot(y,Integrand,'-',y,findForce(y,Integrand))
-    # # plt.ylim(-0.1*Excee,(1*Excee+0.01*Excee))
-    # # plt.xlim((0,xmax))
-    # plt.title('Interface-Bead Interaction')
-    # plt.ylabel('$W/k_bT$')
-    # plt.xlabel("$h [b_s/6^{0.5}]$")
-    # #plt.setp(linewidth=3.0)
-    # plt.legend(('Compressibility'+" "+"$\epsilon= $"+str(Excee)+"\n"+" "+"a="+str(a)+" "+"$d_w=$"+str(dw),'harmonic'+" "+"$\epsilon= $"+str(E4)+"\n"+"rcut="+str(rcut)))
-    # plt.savefig('Interface-Bead Interaction & Harmonic Approximation.png')
-    # plt.savefig('Interface-Bead Interaction & Harmonic Approximation')
-    # plt.close()
     
     
 if __name__ == "__main__":                  # Code that runs the program if called from the command line
     BeadWall()
-#     # saving output
-#     AlignedWallBead = np.column_stack((y,Integrand))
-#     AlignedLJ93 = np.column_stack((y1,LJ93))
-#     AlignedLJ126 = np.column_stack((y2,LJ126))
-#     AlignedColloid = np.column_stack((y3,Colloid))
-#     AlignedHarmonic = np.column_stack((y,Harmonic))
-#     AlignedYukawa = np.column_stack((y1,Yukawa))
-#     np.savetxt("WallBeadInteraction.txt", AlignedWallBead, header="Excee="+str(Excee)+" " +"a="+str(a)+" " +"dw="+str(dw)+" " +"x0="+str(x0))
-#     np.savetxt("WallBeadLJ93.txt", AlignedLJ93, header="E1="+str(E1)+" " +"sigma="+str(sigma))
-#     np.savetxt("WallBeadLJ126.txt", AlignedLJ126, header="E2="+str(E2)+" " +"sigma="+str(sigma))
-#     np.savetxt("WallBeadColloid.txt", AlignedColloid, header="E3="+str(E3)+" " +"sigma="+str(sigma))
-#     np.savetxt("WallBeadHarmonic.txt", AlignedHarmonic, header="E4="+str(E4)+" " +"rcut="+str(rcut))
-#     np.savetxt("WallBeadYukawa.txt", AlignedHarmonic, header="E4="+str(E4)+" " +"rcut="+str(rcut))
-    
-#     plt.plot(y,Integrand,'-')
-#     plt.title('Interface-Bead Interaction')
-#     plt.ylabel('$W/k_bT$')
-#     plt.xlabel("$h [b_s/6^{0.5}]$")
-#     plt.savefig('Interface-Bead Interaction.png')
-#     plt.savefig('Interface-Bead Interaction')
-#     plt.close()
-    
-#     plt.plot(y,Integrand,'-',y1,LJ93,'b-',y2,LJ126,'r-',y3,Colloid,'g-',y,Harmonic,'y-',y1,Yukawa,'k-')
-#     plt.ylim(-0.1*Excee,(Excee+0.1*Excee))
-#     plt.xlim((0,xmax))
-#     plt.title('Interface-Bead Interaction')
-#     plt.ylabel('$W/k_bT$')
-#     plt.xlabel("$h [b_s/6^{0.5}]$")
-#     #plt.setp(linewidth=3.0)
-#     plt.legend(('Compressibility'+" "+"$\epsilon= $"+str(Excee)+"\n"+" "+"a="+str(a)+" "+"$d_w=$"+str(dw),'LJ-9/3'+" "+"$\epsilon= $"+str(E1),'LJ-12/6'+" "+"$\epsilon= $"+str(E2),'colloid'+" "+"$\epsilon= $"+str(E3),'harmonic'+" "+"$\epsilon= $"+str(E4)+"\n"+"rcut="+str(rcut),'yukawa'+" "+"$\epsilon= $"+str(E5)+"\n"+"rcut="+str(rcutyukawa)+"kappa="+str(kappa)))
-#     plt.savefig('Interface-Bead Interaction & LJ.png')
-#     plt.savefig('Interface-Bead Interaction & LJ')
-#     plt.close()
-    
-#     plt.plot(y,Integrand,'-',y,Harmonic,'y-')
-#     plt.ylim(-0.1*Excee,(1*Excee+0.01*Excee))
-#     plt.xlim((0,xmax))
-#     plt.title('Interface-Bead Interaction')
-#     plt.ylabel('$W/k_bT$')
-#     plt.xlabel("$h [b_s/6^{0.5}]$")
-#     #plt.setp(linewidth=3.0)
-#     plt.legend(('Compressibility'+" "+"$\epsilon= $"+str(Excee)+"\n"+" "+"a="+str(a)+" "+"$d_w=$"+str(dw),'harmonic'+" "+"$\epsilon= $"+str(E4)+"\n"+"rcut="+str(rcut)))
-#     plt.savefig('Interface-Bead Interaction & Harmonic Approximation.png')
-#     plt.savefig('Interface-Bead Interaction & Harmonic Approximation')
-#     plt.close()
-    
-    
-# if __name__ == "__main__":					# Code that runs the program if called from the command line
-# 	BeadWall()		
