@@ -101,11 +101,13 @@ You can also add more Nodes to the ends of those Chains. Any Node can have as ma
 but a Chain can only have one parent Node and one child Node. Also important to note is that a Node cannot have another Node as its child.
 
 Here is some slightly more complicated code to show how to make a spine polymer (looks something like below):  
-  o   o   o
-  |   |   |
+```
+  o   o   o  
+  |   |   |  
 o-o-o-o-o-o-o ...  
-    |   |   |
-    o   o   o
+    |   |   |  
+    o   o   o  
+```
     
 ```Python
 Nend = 3 #number monomers on the ends
