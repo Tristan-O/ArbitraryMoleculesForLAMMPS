@@ -10,41 +10,116 @@ import matplotlib
 matplotlib.rcParams.update({'errorbar.capsize': 8}) #makes endcaps of errorbars visible
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 import sys
-import time
 import subprocess as prcs
-sys.path.insert(0, '../../defs-and-scripts')
+import Polymer as poly
+# sys.path.insert(0, '../../defs-and-scripts')
 
-def make_dat_file(Lx, Ly, Lz, n_p, n_s, N=None, N1=None, N2=None, NArms=None, Rc=0, style=None):
+def make_dat_file(Lx, Ly, Lz, n_p, n_s=None, N=None, NArms=None, NSegments=None, style=None, outputFile='./polymer0.data'):
 	'''Makes a dat file called polymer0.dat with the parameters that are necessary'''
+	poly0 = poly.Polymer(1) #First node in polymer is an atom of type 1
+	node0 = poly0.get_node_by_id(0) #Get the first node object in the polymer
+	currAtomType = node0.atom.atomType
+
 	style = style.lower()
 	if style == 'beadspring':
-		if N == None:
-			print 'Style beadspring requires argument N'
-			sys.exit()
-		import BeadSpringInit as init
-		init.AtomArange(Lx, Ly, Lz, n_p, N, n_s, Rc)
+		if not isinstance(N,int):
+			raise ValueError('Style beadspring requires argument N to be specified as int')
 
-	elif style == 'diblock':
-		if N1 == None or N2 == None:
-			print 'Style diblock requires arguments N1, N2 (which do not include endcaps)'
-			sys.exit()
-		import DiblockInit as init
-		init.AtomArange(Lx, Ly, Lz, n_p, N1, N2, n_s, Rc)
+		chain = poly0.add_chain(N-2, currAtomType+1)
+		chain.attach_parent_node(node0)
+
+		node1 = poly0.add_node(currAtomType)
+		chain.attach_child_node(node1)
+
+	elif style == 'multiblock':
+		if not (isinstance(N, list) or isinstance(N, tuple)):
+			raise ValueError('Style multiblock requires argument N to be a list or a tuple')
+		if isinstance(N, int):
+			N = [N]
+		for n in N:
+			currAtomType += 1
+			chain = poly0.add_chain(n-1, currAtomType)
+			chain.attach_parent_node(prevNode)
+			prevNode = poly0.add_node(currAtomType)
+			chain.attach_child_node(prevNode)
+
+		chain = poly0.add_chain(1, poly0.get_node_by_id(0).atom.atomType)
+		chain.attach_parent_node(prevNode)
 
 	elif style == 'star':
-		print 'Style not yet implemented'
-		sys.exit()
+		if N==None or (isinstance(N,int) and not isinstance(NArms,int)) and not (isinstance(N,list) or isinstance(N,tuple)):
+			raise ValueError('Style star requires either N,NArms to be specified as int or N to be specified as list')
+		if isinstance(N, int):
+			N=[N]*NArms
+		else:
+			if NArms != None and len(N)!=NArms:
+				print 'WARNING: Ignoring NArms because you passed in a list of a different size'
+		for n in N:
+			currAtomType += 1
+			chain = poly0.add_chain(n, currAtomType)
+			chain.attach_parent_node(node0)
+
 	elif style == 'spine':
-		print 'Style not yet implemented'
-		sys.exit()
+		if not (isinstance(N,int) or isinstance(N,list) or isinstance(N, tuple)) and not isinstance(NArms,int):
+			raise ValueError('Style star requires either N,NArms to be specified as int or N to be specified as list')
+		if isinstance(N, list) or isinstance(N, tuple):
+			if len(N) != 3:
+				raise ValueError('Style spine requires N to be a list of 3 ints - end-length and length-between-arms, arm-length')
+		else:
+			N =[N]*3
+
+		endchain = poly0.add_chain(N[0]-1, currAtomType)
+		endchain.attach_parent_node(node0)
+		newNode = poly0.add_node(currAtomType)
+		endchain.attach_child_node(newNode)
+
+		for n in range(NArms-1):
+			spinechain = poly0.add_chain(N[1],currAtomType)
+			spinechain.attach_parent_node(newNode)
+			armchain = poly0.add_chain(N[2], currAtomType+1)
+			armchain.attach_parent_node(newNode)
+			newNode = poly0.add_node(currAtomType)
+			spinechain.attach_child_node(newNode)
+			
+		armchain = poly0.add_chain(N[2], currAtomType+1)
+		armchain.attach_parent_node(newNode)
+		endchain = poly0.add_chain(N[0],currAtomType)
+		endchain.attach_parent_node(newNode)
+
+	elif style == 'ring':
+		if not (isinstance(NSegments, int) and isinstance(N, int)):
+			raise ValueError('Style ring requires N,NSegments to be specified as int')
+		
+		loop = poly.Loop(node0)
+		loopseg0 = poly0.add_loop_segment(N-1, currAtomType, loop)
+		loopseg0.attach_parent_node(node0)
+		for i in range(NSegments-1):
+			currAtomType += 1
+			node0 = poly0.add_node(currAtomType)
+			loopseg0.attach_child_node(node0)
+
+			loopseg0 = poly0.add_loop_segment(N-1, currAtomType, loop)
+			loopseg0.attach_parent_node(node0)
+		
+		loopseg0.attach_child_node(poly0.get_node_by_id(0))
 	else:
-		print 'Invalid Style: ', style
-		sys.exit()
+		raise ValueError('Invalid Style: ' + str(style))
+
+	box = poly.Box( [Lx,Ly,Lz], pointSpacing=2 ) #Initialize a box
+
+	for i in range(n_p):
+		#start each one in one of the upper edges of the box
+		rx = 0.8*(-Lx/2. + Lx*i/float(n_p))
+		box.add_polymer(poly0, startPos=[rx, 0,0])
+
+	if n_s != None:
+		box.add_solvents(n_s, 3) #generate solvents in the box
+	box.write_box(outputFile)
 
 	return
 
 
-def cleanLog(infileloc, outfileloc, header='Steps Temp KinE PotE TotE Press Vol'):
+def clean_log(infileloc, outfileloc, header='Steps Temp KinE PotE TotE Press Vol'):
 	'''Cleans the log so that it can be put into stats.py, header must have same number of columns'''
 	#Look for 10 lines that are just numbers
 	import re # regex module
@@ -94,12 +169,12 @@ def do_stats(params_list, infileloc, outfileloc=None):
 	return stats_data
 
 
-def plot_params(outfile, data, stats_data, numcols=None, numrows=None, t_lo=None, t_hi=None, txt = ''):
+def plot_params(outfile, data, stats_data='Steps Temp KinE PotE TotE Press Vol', numcols=None, numrows=None, t_lo=None, t_hi=None, txt = ''):
 	'''Makes several plots vs time of all of the params output by lammps
 	This is written to exclude the plot of timestep vs. timestep, assumed
 	to be the first column of the data list.
-	- The list \'data\' is assumed to be in the same format as that of the 
-	output of the cleanLog() function
+	- The list 'data' is assumed to be in the same format as that of the 
+	output of the clean_log() function
 	- stats_data can be either the output of do_stats(), a list of the parameters
 	in string format, or one string of the parameters separated by spaces'''
 
@@ -166,7 +241,7 @@ def plot_params(outfile, data, stats_data, numcols=None, numrows=None, t_lo=None
 	fig.text(0.5, 0.05, txt, ha='center', fontsize=fontsize)
 	fig.savefig(outfile)#, bbox_inches='tight')
 
-def analyzeDump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES = [2], COLLOID_TYPE = 4, TYPE_IGNORES = [3]):
+def analyze_dump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES = [2], COLLOID_TYPE = 4, TYPE_IGNORES = [3]): #It would make a lot more sense to just input which bond distances you want by atom type...
 	'''Analyze an atom-type dump file
 	INPUT:
 		infile: The name of an atom-type dump file generated by LAMMPS
@@ -244,8 +319,10 @@ def analyzeDump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES = 
 			id_ = int(atom_data[0]) # id
 			Pos = [float(atom_data[2]), float(atom_data[3]), float(atom_data[4])]
 
-			if atoms[id_-1].atomID == id_: #because atoms list was sorted earlier, I can do this
-				atoms[id_-1].addCoord(Pos, box)
+			for atom in atoms:
+				if atom.atomID == id_:
+					atom.addCoord(Pos, box)
+					break
 			else:
 				print "ID not found ", id_
 				print timestepData.split('ITEM: ATOMS id type xs ys zs')[0]
@@ -283,7 +360,7 @@ def analyzeDump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES = 
 				colloids.append(atoms[i])
 		for i in colloids:
 			for j in colloids:
-				colloids[i].addNeighbor(colloids[j])
+				i.addNeighbor(j)
 		atoms = colloids[:]
 
 
@@ -302,10 +379,6 @@ def analyzeDump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES = 
 				#Find minimum distance - because periodic boundaries are a thing the bond might be across two walls
 				dist = math.sqrt(sum(min( (i.Pos[k][l]-j.Pos[k][l])**2. , (i.Pos[k][l]-i.Box[k][l][0]-j.Pos[k][l]+j.Box[k][l][1])**2., (-i.Pos[k][l]+i.Box[k][l][1]+j.Pos[k][l]-j.Box[k][l][0])**2. ) for l in range(3)))
 				# Pretty sure the above formula is right, it's the distance between atom1 and the wall + the distance between atom2 and the opposite wall
-				# if dist > 0.5 and i.atomID == 19 and j.atomID == 20:
-				# 	print dist
-				# 	for l in range(3):
-				# 		print (i.Pos[k][l]-j.Pos[k][l]), (i.Pos[k][l]-i.Box[k][l][0]-j.Pos[k][l]+j.Box[k][l][1]), (-i.Pos[k][l]+i.Box[k][l][1]+j.Pos[k][l]-j.Box[k][l][0])
 			allNeighbors.append([neighs,dist])
 
 	temp = []
