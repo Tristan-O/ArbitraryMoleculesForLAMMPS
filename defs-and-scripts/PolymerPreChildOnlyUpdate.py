@@ -1,19 +1,15 @@
-#TODO: Add functionality for Angles, Dihedrals, Bond Coeffs
-#Ways to improve:
-#	- Position generation is done as you add polymers, but it could be done when you try to write it out, 
-#	  and then the box would know how many polymers, how much "volume" they will take, could even possibly
-#	  do something fancy with splitting the polymers into smaller boxes or something
-#	- Look at scipy, they have a whole spatial module that could help with placing atoms. See KDTree
-
+#Still not sure how to handle closed loops with polymer generation, I guess
+#For future: consider making atomType class so that mass, radius etc... can be specified for those
 import math
 import numpy as np
 from numpy import linalg as LA
+
+
 
 class Box:
 	#This can keep track of polymers, atomIDs and also be used to generate solvents
 	#IDEA: if validating doesn't work out, I can generate a lattice of points that
 	#	   the polymer can be generated on and remove available points as atoms go into them
-	TEST = 0
 	def __init__(self, boxDims, pointSpacing=0.5):
 		if (not isinstance(boxDims, list) and not isinstance(boxDims, tuple)) or any(boxDims[i] <= 0 for i in range(3)):
 			raise TypeError('Object: Box constructor malformed')
@@ -29,7 +25,7 @@ class Box:
 		self.occupiedPoints = np.array([])
 		self.atomTypes = {}
 
-	def define_atom_type(self, atomType, mass=1., diameter=1., density=1.):
+	def set_atom_type_info(self, atomType, mass=1., diameter=1., density=1.),
 		if not isinstance(atomType, int): #in case the user gives a string or float or something
 			atomType = int(atomType)
 		self.atomTypes[atomType] = {'mass':mass, 'diameter':diameter, 'density':density}
@@ -122,15 +118,15 @@ class Box:
 		    
 			for i in self.atomList:
 				if i.atomType not in self.atomTypes.keys():
-					self.define_atom_type(i.atomType) #initialize default values for this atomType
+					self.set_atom_type_info(i.atomType) #initialize default values for this atomType
 
 			bondTypes = []
 			for i in self.bondList:
 				if i.bondType not in bondTypes:
 					bondTypes.append( i.bondType )
 
-			f.write("\n{} atom types\n".format(len(self.atomTypes)))
-			f.write("{} bond types\n".format(len(bondTypes)))
+			f.write("\n%i atom types\n" % len(self.atomTypes))
+			f.write("%i bond types\n" % len(bondTypes))
 			f.write("0 angle types\n")
 			f.write("0 dihedral types\n")
 			f.write("0 improper types\n")
@@ -159,31 +155,29 @@ class Box:
 				atom.atomID = i
 				f.write("%i %i " % (atom.atomID, atom.atomType))
 				f.write("%2.6f %2.6f %2.6f " % (atom.pos[0], atom.pos[1], atom.pos[2])) # positions, using old string format because I dont want to get rid of it
-				f.write("{} ".format(atom.moleculeID)) # molecular tag ***************######################################################################################
-				f.write("{} ".format(self.atomTypes[atom.atomType]['diameter'])) # diameter
-				f.write("{} ".format(self.atomTypes[atom.atomType]['density'])) # density
+				f.write("{} ").format(atom.moleculeID) # molecular tag ***************######################################################################################
+				f.write("{} ").format(self.atomTypes[atom.atomType]['diameter']) # diameter
+				f.write("{} ").format(self.atomTypes[atom.atomType]['density']) # density
 				f.write("0 0 0\n")
 
 		    # BONDS: *******************************************************************************
-			if len(self.bondList)>0:
-				f.write("\nBonds\n")
-				f.write("\n")
+			f.write("\nBonds\n")
+			f.write("\n")
 
-				bondTypes.sort()
-				bondDict = {}
-				i=0
-				for bondType_ in bondTypes:
-					i+=1
-					bondDict[bondType_] = i
-				i=0
-				for bond in self.bondList:
-					i+=1
-					f.write("%i " % i)
-					f.write("%i " % bondDict[bond.bondType]) # the bond is hydrophobic-to-philic
-					f.write("%i %i\n" % (bond.atom1.atomID, bond.atom2.atomID)) 
+			bondTypes.sort()
+			bondDict = {}
+			i=0
+			for bondType_ in bondTypes:
+				i+=1
+				bondDict[bondType_] = i
+			i=0
+			for bond in self.bondList:
+				i+=1
+				f.write("%i " % i)
+				f.write("%i " % bondDict[bond.bondType]) # the bond is hydrophobic-to-philic
+				f.write("%i %i\n" % (bond.atom1.atomID, bond.atom2.atomID)) 
 
-				print "Bond types and their corresponding atom type definitions:"
-				print bondDict
+			print bondDict
 
 	def add_semi_rand_pos(self, atom, prevPos1, prevPos2, minDistance):
 		spread = 0.5
@@ -240,66 +234,70 @@ class Box:
 
 		#test if there are children remaining in the tree (polymer is like a tree data structure)
 		if isinstance(obj, Node):#if there are, call this function again on each of those children
-			for child in obj.children:
-				if isinstance(child, Chain) or isinstance(child, Node):
-					self.generate(child, prevPos1[:], prevPos2[:], minDistance)
-					#important that these lists are not passed by reference if there's ever two chains attached to one node
-				elif isinstance(child, Loop): #elif (objChild.loop.nodeParentSuper == obj and not objChild.loop.built) or objChild.loop == loop: #Only begin to generate this loop if you are starting at the loop's beginning or in the process of generating it
-					self.generate_closed_loop(child, prevPos1[:], minDistance)
+			for objChild in obj.attached:
+				if isinstance(objChild, tuple):#this check is not really necessary
+					if isinstance(objChild[0], Chain) and objChild[1] == 'myChild': # if the node is the parent of this chain
+						self.generate(objChild[0], prevPos1[:], prevPos2[:], minDistance)
+						#important that these lists are not passed by reference if there's ever two chains attached to one node
+					if isinstance(objChild[0], LoopSegment) and objChild[1] == 'myChild': #elif (objChild.loop.nodeParentSuper == obj and not objChild.loop.built) or objChild.loop == loop: #Only begin to generate this loop if you are starting at the loop's beginning or in the process of generating it
+						self.generate_closed_loop(objChild[0], prevPos1[:], minDistance)
 				else:
 					raise ValueError('Object: Node has a child that is not of the correct type')
 		elif isinstance(obj, Chain):
-			self.generate(obj.child, prevPos1[:], prevPos2[:], minDistance)
+			self.generate(obj.nodeChild, prevPos1[:], prevPos2[:], minDistance)
 
-	def generate_closed_loop(self, loop, prevPos, minDistance):
+	def generate_closed_loop(self, loopseg, prevPos, minDistance):
 		#choose random direction, this will point to circle center
 		#loop.center will be this
-		Positions = []
-		circleRadius = loop.numAtoms*self.pointSpacing/2./math.pi
-		randDirection = np.random.random(3)-0.5
-		randDirection /= LA.norm(randDirection)
 
-		A = prevPos / LA.norm(prevPos)
-		C = np.cross(A,randDirection)#random vector perpendicular to A
-		
-		B = np.cross(A,C)
-		B /= LA.norm(B)
+		if loopseg.loop.currentAtomNum == 0:#if this is the start of the loop
+			loopseg.loop.Position = []
+			circleRadius = loopseg.loop.numAtoms*self.pointSpacing/2./math.pi
+			randDirection = np.random.random(3)-0.5
+			randDirection /= LA.norm(randDirection)
 
-		for i in range(loop.numAtoms): 
-			theta = 2.*math.pi*(i+1.)/(loop.numAtoms+1.)
-			Pos = circleRadius*(math.cos(theta)-1)*A + circleRadius*math.sin(theta)*B + prevPos
-			foundGoodPos = False
-			while not foundGoodPos:
-				foundGoodPos = True
-				for j in self.occupiedPoints:
-					dist = LA.norm(j-Pos)
-					if dist < minDistance:
-						foundGoodPos = False
-						Pos += 2.*(np.random.random(3)-0.5)
-				for j in range(3):
-					if Pos[j] > 0.9*self.boxDims[j]:#if atom is outside of box, change to move in a random direction
-						foundGoodPos = False
-						Pos[j]= 0.9*self.boxDims[j] - np.random.random()
-					elif Pos[j] < -0.9*self.boxDims[j]:#if atom is outside of box, change to move in a random direction
-						foundGoodPos = False
-						Pos[j]= -0.9*self.boxDims[j] + np.random.random()
-			loop.atomList[i].pos = Pos
-			self.occupiedPoints = np.vstack([self.occupiedPoints, Pos])
-			self.polymerAtomList.append(loop.atomList[i])
+			A = prevPos / LA.norm(prevPos)
+			C = np.cross(A,randDirection)#random vector perpendicular to A
+			
+			B = np.cross(A,C)
+			B /= LA.norm(B)
 
-		for obj in loop.loopElems:
-			if isinstance(obj, Chain): #technically this check is unneccessary, since a Chain can only have one child and that child by continuation is in the Loop
-				children = [obj.child]
-				pos1 = obj.atomList[-1].pos[:] #atom.pos was set earlier in this function
-			elif isinstance(obj, Node):
-				children = obj.children
-				pos1 = obj.atom.pos[:]
-			for child in children:
-				if child == loop:
-					continue
-				if child not in loop.loopElems and child != None:
-					pos2 = prevPos - circleRadius*A #center of the circle
-					self.generate(child, pos1[:], pos2[:], minDistance)#child is told to generate away from center of loop circle, this might be a problme though if the circle clips the edge of the box...
+			for i in range(loopseg.loop.numAtoms): 
+				theta = 2.*math.pi*(i+1.)/(loopseg.loop.numAtoms)
+				Pos = circleRadius*(math.cos(theta)-1)*A + circleRadius*math.sin(theta)*B +prevPos
+				foundGoodPos = False
+				while not foundGoodPos:
+					foundGoodPos = True
+					for j in self.occupiedPoints:
+						dist = LA.norm(j-Pos)
+						if dist < minDistance:
+							foundGoodPos = False
+							Pos += 2.*(np.random.random(3)-0.5)
+					for j in range(3):
+						if Pos[j] > 0.9*self.boxDims[j]:#if atom is outside of box, change to move in a random direction
+							foundGoodPos = False
+							Pos[j]= 0.9*self.boxDims[j] - np.random.random()
+						elif Pos[j] < -0.9*self.boxDims[j]:#if atom is outside of box, change to move in a random direction
+							foundGoodPos = False
+							Pos[j]= -0.9*self.boxDims[j] + np.random.random()
+				loopseg.loop.Positions.append(Pos)
+				self.occupiedPoints = np.vstack([self.occupiedPoints, Pos[:]])
+
+		for i in range(len(loopseg.atomList)):
+			atom = loopseg.atomList[i]
+			i += loopseg.loop.currentAtomNum
+			self.polymerAtomList.append(atom)
+			atom.pos = loopseg.loop.Positions[i][:]
+		loopseg.loop.currentAtomNum += len(loopseg.atomList)+1 #+1 because of the node after this
+		prevPos1 = loopseg.atomList[-1].pos
+		prevPos2 = loopseg.atomList[-2].pos
+
+		if loopseg.nodeChild == loopseg.loop.nodeParentSuper:
+		#if this has reached back to the beginning of the loop
+			return
+		else:
+			loopseg.loop.built = True
+			self.generate(loopseg.nodeChild, prevPos1[:], prevPos2[:], minDistance, loop=loopseg.loop)
 
 	def add_polymer(self, polymer, startPos=[0,0,0], minDistance=None):
 		'''Adds a list of atoms for this polymer, which have Position, Type and ID information
@@ -307,10 +305,11 @@ class Box:
 		boxDims is the three side lengths of the box
 		This assumes that the origin of the box is in the center'''
 		#Make sure polymer is ready to be written
-		if not isinstance(polymer, Polymer):
-			raise TypeError('Object: Box add_polymer call malformed')
 		if minDistance == None:
 			minDistance=self.pointSpacing/2.#this used to be an argument to this function and I'm too lazy to replace it with self.pointSpacing everywhere so I'm just redefining it here
+		for i in polymer.chainList:
+			if i.nodeParent == None:
+				raise ValueError('Object: Box cannot accept a polymer with a chain that has no parent node')
 		for i in range(3):
 			if abs(startPos[i]) >= 0.9*self.boxDims[i]:
 				s='xyz'
@@ -324,11 +323,21 @@ class Box:
 					foundGoodPos = False
 					startPos += (np.random.random(3)-0.5)
 
+		#Check that all loops are closed
+		for i in polymer.loopList:
+			i.loop.built = False#reset these to rebuild a polymer
+			i.loop.currentAtomNum = 0
+			if not i.loop.closed:
+				raise ValueError('Attempted to write polymer containing unclosed loop')
+
 		self.numPolymers += 1
-		self.polymerAtomList = []
+		self.polmerAtomList = []
+		if not isinstance(polymer, Polymer):
+			raise TypeError('Object: Box add_polymer call malformed')
 		print 'Adding polymer'
 
 		startPos = np.array(startPos)
+		# polymer.nodeList[0].atom.pos = startPos
 			
 		forwardVec = np.random.random(3) - 0.5
 		forwardVec = forwardVec / LA.norm(forwardVec)
@@ -336,13 +345,12 @@ class Box:
 
 		#clone atoms and bonds in this box so that changes to them in the polymer object will not affect the ones present in the box:
 		atomList = []
-		temp = []
 
 		for atom in self.polymerAtomList:
 			clone = atom.clone()
 			clone.moleculeID = self.numPolymers
 			clone.parent = self
-			atomList.append(clone)
+			atomList.append(clone) #cloned atoms do not have any bonds
 			self.atomList.append(clone)
 
 		bondList = []
@@ -355,142 +363,183 @@ class Box:
 							atom1 = clone
 						elif bond.atom2.cloneID == clone.cloneID:
 							atom2 = clone
-					self.bondList.append( Bond(atom1, atom2) )#adds this bond to both atom1 and atom2, which are clones, and these bonds are now children of this box
+					temp.append( Bond(atom1, atom2) )#adds this bond to both atom1 and atom2, which are clones, and these bonds are now children of this box
 					bondList.append(bond) #since bond is known to two atoms by definition, we don't want it to get written twice
-		#self.bondList = temp
+		self.bondList = temp
 
 
 class Polymer:
-	def __init__(self, node0):
-		if not isinstance(node0, Node):
+	def __init__(self, initAtomType):
+		if not isinstance(initAtomType, int):
 			raise TypeError('Object: Polymer constructor malformed')
+		self.currentChainID = 0 #ID of the most recently added chain
+		self.currentNodeID = 0
+		self.currentLoopID = 0
 		self.chainList = []
-		self.nodeList = []
-		self.add_node(node0)
-		self.set_parent(node0)
+		self.nodeList = [ Node(initAtomType, self.currentNodeID) ]
 		self.loopList = []
 		self.bondList = []
+		self.currentNodeID += 1
 
-	def add_chain(self, chain):
-		self.chainList.append( chain )
+	def add_chain(self, chainLen, atomType):
+		self.chainList.append( Chain(chainLen, atomType, self.currentChainID) )
+		self.currentChainID += 1
+		return self.chainList[-1]
 
-	def add_node(self, node):
-		self.nodeList.append( node )
- 
-	def add_loop(self, loop):
-		self.loopList.append( loop )
+	def add_loop_segment(self, segLen, atomType, loop):
+		self.loopList.append( LoopSegment(segLen, atomType, loop, self.currentLoopID) )
+		self.currentLoopID += 1
+		return self.loopList[-1]
 
-	def set_parent(self, obj):
-		if obj.parent == self:
-			return
-		elif isinstance(obj, Chain):
-			children = [obj.child]
-			self.chainList.append(obj)
-		elif isinstance(obj, Node):
-			children = obj.children
-			self.nodeList.append(obj)
-		elif isinstance(obj, Loop):
-			children = obj.loopElems
-			self.loopList.append(obj)
-		else:
-			return
-
-		obj.parent = self
-		for child in children:
-			self.set_parent(child)
+	def add_node(self, atomType):
+		self.nodeList.append( Node(atomType, self.currentNodeID) )
+		self.currentNodeID += 1
+		return self.nodeList[-1]
 
 	def get_chain_by_id(self, chainID):
-		return self.chainList[chainID]
+		for i in self.chainList:
+			if i.chainID == chainID:
+				return i
+		else: #if for loop doesn't get broken out of
+			raise NameError('Could not find chain with ID %i' % chainID)
 
 	def get_node_by_id(self, nodeID):
-		return self.nodeList[nodeID]
+		for i in self.nodeList:
+			if i.nodeID == nodeID:
+				return i
+		else: #if for loop doesn't get broken out of
+			raise NameError('Could not find node with ID %i' % nodeID)
+
+	def get_loop_by_id(self, loopSegmentID):
+		for i in self.loopList:
+			if i.loopSegmentID == loopSegmentID:
+				return i
+		else: #if for loop doesn't get broken out of
+			raise NameError('Could not find loopSegment with ID %i' % loopSegmentID)
 
 
 class Chain:
-	def __init__(self, chainLen, atomType):
-		if not isinstance(chainLen, int) or not isinstance(atomType, int):
+	def __init__(self, chainLen, atomType, chainID):
+		if not isinstance(chainLen, int) or not isinstance(atomType, int) or not isinstance(chainID, int):
 			raise TypeError('Object: Chain constructor malformed')
 		self.chainLen = int(chainLen)
 		self.atomType = int(atomType)
-		self.chainID = None
-		self.child = None
+		self.chainID = int(chainID)
+		self.nodeParent = None
+		self.nodeChild = None
 		self.atomList = []
-		self.parent = None
 		for i in range(chainLen):
 			#Add atoms
 			self.atomList.append( Atom(self, atomType) )
 			
 		for i in range(chainLen-1):
 			#Add chainLen-1 bonds between atoms
-			Bond( self.atomList[i], self.atomList[i+1] )
+			Bond(self.atomList[i], self.atomList[i+1])
 	
-	def add_child(self, child):
+	def attach_parent_node(self, node):
+		#Attach this chain to its parent node
 		#Bond here too
-		if not isinstance(child, Node):
+		if self.nodeParent != None:
+			raise TypeError('Object: A chain cannot detach a parent node')
+		if not isinstance(node, Node):
 			raise TypeError('Object: Chain expected an instance of Node')
-		if self.child != None:
-			raise IndexError('Cannot reset child of Chain')
-		self.child = child
-		atom = self.atomList[-1]
-		Bond(child.atom, atom)
-		if self.parent != None:
-			self.parent.set_parent(child)
+		node.attach_chain( self, 'myChild' ) #this chain is a child of node
+		self.nodeParent = node
+		atom1 = node.atom
+		atom2 = self.atomList[0]
+		bond = Bond(atom1, atom2)
+
+	def attach_child_node(self, node):
+		#Attach this chain to its parent node
+		#Bond here too
+		if self.nodeChild != None:
+			raise TypeError('Object: A chain cannot detach a child node')
+		if not isinstance(node, Node):
+			raise TypeError('Object: Chain expected an instance of Node')
+		node.attach_chain( self, 'myParent' ) #this chain is the parent of node
+		self.nodeChild = node
+		atom1 = node.atom
+		atom2 = self.atomList[-1]
+		bond = Bond(atom1, atom2)
 
 
 class Loop:
-	def __init__(self, loopElemList):
+	def __init__(self, node):
 		self.numAtoms = 0
-		self.loopElems = loopElemList #loop below requires two elements
-		self.atomList = [ ]
-		for i in range(len(loopElemList)):
-			#self.loopElems.append(loopElemList[i])
-			if len(loopElemList) > 1 and i != len(loopElemList) -1:
-				self.loopElems[i].add_child(self.loopElems[i+1])
-
-			if isinstance(loopElemList[i], Chain):
-				self.numAtoms += loopElemList[i].chainLen
-				for j in loopElemList[i].atomList:
-					self.atomList.append(j)
-			elif isinstance(loopElemList[i], Node):
-				self.numAtoms += 1
-				self.atomList.append(loopElemList[i].atom)
+		self.nodeParentSuper = node
+		self.center = []
+		self.closed = False
+		self.built=False
+		self.currentAtomNum = 0
 		self.Positions = []
+
+class LoopSegment: #basically no different than a Chain
+	def __init__(self, segLen, atomType, loop, loopsegID):
+		if loop.closed == True:
+			raise IndexError('Attempted to add LoopSegment to loop that is already closed')
+		self.nodeParent = None
+		self.nodeChild = None
+		self.segmentLen = segLen
+		self.loop = loop
+		self.loopSegmentID = loopsegID
+		self.loop.numAtoms += self.segmentLen + 1
+		#+1 from parent node, this number doesn't need to be exact b/c it's only for calculating the spatial radius when generating the loop
+		self.atomList = []
+		for i in range(segLen): #Add atoms
+			self.atomList.append( Atom(self, atomType) )
+		for i in range(segLen-1): #Add chainLen-1 bonds between atoms
+			Bond(self.atomList[i], self.atomList[i+1])
+
+	def attach_parent_node(self, node): #Bond here too
+		if self.nodeParent != None:
+			raise TypeError('Object: A LoopSegment cannot detach a parent node')
+		if not isinstance(node, Node):
+			raise TypeError('Object: LoopSegment expected an instance of Node')
+		node.attach_loop_segment( self, 'myChild') #this chain is a child of node
+		self.nodeParent = node
+		atom1 = node.atom
+		atom2 = self.atomList[0]
+		bond = Bond(atom1, atom2)
+
+	def attach_child_node(self, node): #Bond here too
+		if self.nodeChild != None:
+			raise TypeError('Object: A LoopSegment cannot detach a child node')
+		if not isinstance(node, Node):
+			raise TypeError('Object: LoopSgement expected an instance of Node')
+		node.attach_loop_segment( self, 'myParent' ) #this chain is the parent of node
+		self.nodeChild = node
+		atom1 = node.atom
+		atom2 = self.atomList[-1]
+		bond = Bond(atom1, atom2)
+		if node == self.loop.nodeParentSuper:
+			self.loop.closed = True
 
 
 class Node:
-	def __init__(self, atomType):
-		if not isinstance(atomType, int):
+	def __init__(self, atomType, nodeID):
+		if not isinstance(nodeID, int) or not isinstance(atomType, int):
 			raise TypeError('Object: Node constructor malformed')
-		self.children = []
+		self.attached = []
+		self.nodeID = int(nodeID)
 		self.atom = Atom(self, int(atomType))
-		self.parent = None
 
-	def add_child(self, child):
-		if not (isinstance(child, Chain) or isinstance(child, Node) or isinstance(child, Loop)):
-			raise ValueError('Object: Node can only take an instance of Chain, Node or Loop as a child')
-		if child in self.children:
-			raise IndexError('This object is already a child of this node')
-		self.children.append(child)
-		child.parent = self.parent
-		if isinstance(child,Node):
-			Bond(self.atom, child.atom)
-		elif isinstance(child,Chain):
-			Bond(self.atom, child.atomList[-1])
-		elif isinstance(child, Loop):
-			child.startNode = node0
-			Bond(self.atom, child.atomList[0])
-			Bond(self.atom, child.atomList[-1])
-		if self.parent != None:
-			self.parent.set_parent(child)
+	def attach_chain(self, chain, relationship):
+		for child in self.attached:
+			if chain in child:
+				raise IndexError('This chain is already in a relationship with this node') 
+		self.attached.append( (chain, relationship) )
+
+	def attach_loop_segment(self, loopseg, relationship):
+		for child in self.attached:
+			if loopseg in self.attached[0]:
+				return
+		self.attached.append( (loopseg, relationship) )
 
 
 class Bond:
 	def __init__(self, atom1, atom2):
 		if not isinstance(atom1, Atom) or not isinstance(atom2, Atom):
 			raise TypeError('Object: Bond constructor malformed')
-		elif atom1 == atom2:
-			raise ValueError('Object: Bond Atoms cannot be the same')
-
 		self.atom1 = atom1
 		self.atom2 = atom2
 		#Define a string unique to each bond TYPE, ex. '1-1'
@@ -499,14 +548,15 @@ class Bond:
 		atom1.bondList.append(self)
 		atom2.bondList.append(self)
 
+
 class Atom:
 	currentCloneID = 0
 	def __init__(self, parent, atomType):
-		if (not isinstance(parent, Box) and not isinstance(parent, Chain) and not isinstance(parent, Node)) or not isinstance(atomType, int):
+		if (not isinstance(parent, Box) and not isinstance(parent, Chain) and not isinstance(parent, Node) and not isinstance(parent, LoopSegment)) or not isinstance(atomType, int):
 			raise TypeError('Object: Atom constructor malformed')
-		self.parent = parent
+		self.parent = parent #parent is chain or node
 		self.atomType = atomType
-		self.pos = None#np.array([])
+		self.pos = 'j'#np.array([])
 		self.bondList = []
 		self.moleculeID = -1
 
@@ -525,65 +575,81 @@ class Atom:
 
 if __name__ == '__main__':
 	print 'Example polymer generation'
-	print 'Make some arbitrary simple polymer'
+	print 'Make some polymer with an arbitrary number of arms'
+	poly0 = Polymer(1) #First node in polymer is an atom of type 1
 
-	node0 = Node(1) #Get the first node object in the polymer 
-	poly0 = Polymer(node0) #First node in polymer is an atom of type 1
-	chain0 =  Chain(10, 2) #Generate a chain of len 10 and atom type 2
-	node0.add_child(chain0) #Attach chain0 to node0
+	node0 = poly0.get_node_by_id(0) #Get the first node object in the polymer 
+	chain0 = poly0.add_chain(10, 2) #Generate a chain of len 10 and atom type 2
+	chain0.attach_parent_node(node0) #Attach chain0 to node0
 
+	chain1 = poly0.add_chain(5, 3) #Generate a chain of len 10 and atom type 3
+	chain1.attach_parent_node(node0) #Attach chain0 to node0 at the the 0 end of the chain (end can be 0 or 1)
 
-	node1 = Node(1)
-	node0.add_child(node1)
+	node1 = poly0.add_node(4)
+	chain1.attach_child_node(node1)
 
-	chain1 = Chain(5, 2) #Generate a chain of len 10 and atom type 3
-	node1.add_child(chain1)
+	chain3 = poly0.add_chain(10,5)
+	chain3.attach_parent_node(node1)
 
-	node2 = Node(1)
-	chain1.add_child(node2)
+	chain4 = poly0.add_chain(10,5)
+	chain4.attach_parent_node(node1)
 
 	print 'Make a ring polymer'
-	node0 = Node(1)
-	poly1 = Polymer(node0)
-	chain0 = Chain(10,2)
+	poly1 = Polymer(1)
 
-	loop = Loop( [chain0] )
-	node0.add_child(loop)
+	node0 = poly1.get_node_by_id(0)
+	loop = Loop(node0)
+	loopseg = poly1.add_loop_segment(10,2, loop)
+	loopseg.attach_parent_node(node0)
+	loopseg.attach_child_node(node0)
 
 	print 'Make a more complicated ring polymer'
-	node0 = Node(1)
-	poly2 = Polymer(node0)
+	poly2 = Polymer(1)
 
-	chain0 = Chain(10,2)
-	node1 = Node(1)
-	chain1 = Chain(10,2)
-	node2 = Node(1)
-	chain2 = Chain(10,2)
-	loop = Loop([chain0,node1,chain1,node2,chain2])
+	node0 = poly2.get_node_by_id(0)
+	loop0 = Loop(node0)
+	loopseg0 = poly2.add_loop_segment(10,2, loop0)
+	loopseg0.attach_parent_node(node0)
 
-	node0.add_child(loop)
+	node1 = poly2.add_node(1)
+	loopseg0.attach_child_node(node1)
+	loopseg1 = poly2.add_loop_segment(10,2, loop0)
+	loopseg1.attach_parent_node(node1)
+	loopseg1.attach_child_node(node0)
+
+	node2 = poly2.add_node(1)
+	loop1 = Loop(node1)
+	loopseg2 = poly2.add_loop_segment(20,3, loop1)
+	loopseg2.attach_parent_node(node1)
+	loopseg2.attach_child_node(node2)
+	loopseg3 = poly2.add_loop_segment(20,3, loop1)
+	loopseg3.attach_child_node(node1)
+	loopseg3.attach_parent_node(node2)
 
 	print 'Sawblade Polymer'
-	node0 = Node(1)
-	poly3 = Polymer(node0)
-
-	loopList = []
+	poly3 = Polymer(1)
+	node0 = poly3.get_node_by_id(0)
+	loop = Loop(node0)
 	for i in range(5):
-		loopList.append( Chain(10,i+1) )
-		node = Node(1)
-		loopList.append( node )
-		node.add_child( Chain(5,3) )
+		chain = poly3.add_chain(5,2)
+		chain.attach_parent_node(node0)
+		loopseg0 = poly3.add_loop_segment(10,i+3, loop)
+		loopseg0.attach_parent_node(node0)
+		node0 = poly3.add_node(1)
+		loopseg0.attach_child_node(node0)
+	loopseg0 = poly3.add_loop_segment(10,i+4, loop)
+	loopseg0.attach_parent_node(node0)
+	chain = poly3.add_chain(5,2)
+	chain.attach_parent_node(node0)
+	loopseg0.attach_child_node(poly3.get_node_by_id(0))
 
-	loopList.append( Chain(10,2) )
-	node0.add_child( Chain(5,3) )
-	node0.add_child( Loop(loopList) )
-
+	
 	box = Box([100,100,100], pointSpacing=2) #Initialize a 100x100x100 box
 	box.add_polymer(poly0, startPos=[-35,-35,-35]) #create that polymer one time in the box, starting at the position (-35,-35,-35)
 	box.add_polymer(poly1, startPos=[ 35, 35, 35]) 
 	box.add_polymer(poly2, startPos=[ 35,-35,-35])
 	box.add_polymer(poly3, startPos=[ 35, 35,-35])
-	box.add_solvents(100, 3) #generate solvents in the box
+	box.add_solvents(100, 6) #generate solvents in the box
 
 	box.write_box('./polymer0.data')
 	import subprocess as prcs

@@ -47,7 +47,7 @@ Produces an array of plots of all of the thermodynamic parameters produced by cl
 * txt is some text that will be put at the bottom of your plot.
 
 ##### analyze_dump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES = [2], COLLOID_TYPE = 4, TYPE_IGNORES = [3]
-WIP - Analyzes an atom-style dump file and produces a histogram of the distances between monomers.
+WIP - Analyzes an atom-style dump file and produces a histogram of the distances between monomers. It works for beadspring polymers and colloids (two individual atoms)
 
 
 
@@ -64,20 +64,19 @@ Every script using Polymer directly will need the following lines:
 ```Python
 import Polymer as poly #Import the definitions
 
-poly0 = poly.Polymer(TYPE) #First Node in polymer is an atom of type TYPE
-node0 = poly0.get_node_by_id(0) #You need to access the first Node to begin to build on it
+node0 = poly.Node(TYPE) #Define a node that will serve as the starting point of your molecule/polymer
+poly0 = poly.Polymer(node0) #Define a Polymer on that Node
 ... # Further define your polymer here
 box = poly.Box([Lx,Ly,Lz]) #Initialize a Box with those dimensions
 box.add_polymer(poly0) #Box adds this polymer to the box
 box.write_box('MYOUTPUTFILE') #Everything that this box knows is written to a LAMMPS-style data file
 ```
-This code by itself will add a "polymer" of just one monomer to your box. Further defining your polymer is done like so:
+This code by itself will add a "polymer" of just one monomer to your box. Further defining your Polymer is done like so:
 
 ```Python
 import Polymer as poly #Import the definitions
 currentType = 1 #notice me!
-poly0 = poly.Polymer(currentType) #First Node in polymer is an atom of type 1
-node0 = poly0.get_node_by_id(0) #You need to access the first Node to begin to build on it
+node0 = poly.Node(currentType) #You need to access the first Node to begin to build on it
 
 # Further define your polymer here
 # For instance, if I wanted to generate a star polymer (looks like an *):
@@ -85,8 +84,8 @@ NArms = 5 #the number of arms I want my star to have
 N = 10 #the length of each arm
 for i in range(NArms): #loop through NArms times
 			currrentType += 1 #give every arm a different type
-			chain = poly0.add_chain(N, currentType) #add a Chain object to the polymer
-			chain.attach_parent_node(node0) #make that Chain stem from the first Node in the polymer, node0
+			chain = poly.Chain(N, currentType) #add a Chain object to the polymer
+			node0.add_child(chain) #make that Chain stem from the first Node in the polymer, node0
                                       #this is referred to as making that Node its parent
 
 box = poly.Box([Lx,Ly,Lz]) #Initialize a Box with those dimensions
@@ -102,11 +101,11 @@ but a Chain can only have one parent Node and one child Node. Also important to 
 
 Here is some slightly more complicated code to show how to make a spine polymer (looks something like below):  
 ```
-  o   o   o  
-  |   |   |  
-o-o-o-o-o-o-o ...  
-    |   |   |  
-    o   o   o  
+  o       o       o  
+  |       |       |  
+o-o-o-o-o-o-o-o-o-o-o-o-o ...  
+      |       |       |  
+      o       o       o  
 ```
     
 ```Python
@@ -116,49 +115,55 @@ Narm = 4 #number of monomers on each arm
 numArms = 10 #number of arms to add
 spineType = 1
 armType = 2
+currentType = 1
 
-endchain = poly0.add_chain(Nend-1, spineType) #-1 here because the first Node takes away the need for one
-endchain.attach_parent_node(node0)
-newNode = poly0.add_node(currAtomType)
-endchain.attach_child_node(newNode)
+endChain = poly.Chain( Nend-1,currentType ) #define a chain that goes on the end of the polymer, t has one less length because there is a Node to start the polymer
+node0.add_child(endChain) #add that chain as a child of the first node
+
+node0 = poly.Node( currentType ) #redefine node0 to now be the second node in the polymer (the first one with an arm branch)
+endChain.add_child( node0 ) #add that Node to the end of the chain on the end of the polymer
 
 for n in range(NArms-1):
-	spinechain = poly0.add_chain(Nbtwn, spineType)
-  spinechain.attach_parent_node(newNode)
-  armchain = poly0.add_chain(Narm, armType)
-	armchain.attach_parent_node(newNode)
-	newNode = poly0.add_node(spineType)
-	spinechain.attach_child_node(newNode)
-			
-armchain = poly0.add_chain(Narm, armType)
-armchain.attach_parent_node(newNode)
-endchain = poly0.add_chain(Nend,currAtomType)
-endchain.attach_parent_node(newNode)
+  spineChain = poly.Chain( Nbtwn,currrentType ) #add another spine chain to the newest Node
+  armChain = poly.Chain( Narm,currentType+1 ) #add an arm to the newest Node
+  node0.add_child( spineChain )
+  node0.add_child( armChain )
+
+  node0 = poly.Node( currentType ) #make a new Node
+  spineChain.add_child( node0 ) #add that new Node to the end of the newest spine Chain
+  
+armChain = poly.Chain( Narm, currentType+1 ) #add one last arm to the last Node
+newNode.add_child(armChain)
+
+endChain = poly.Chain( Nend,currentType ) #add a chain on the end
+newNode.add_child( endChain )
 ```
-The final example is to generate polymers with loops. This is also very easy, using the Loop and LoopSegment objects defined in Polymer.py. An example of generating a ring polymer is below.
+The final example is to generate polymers with loops. This is also very easy, using the Loop object defined in Polymer.py. An example of generating a ring polymer is below.
 ```Python
-loop0 = Loop(node0) #first you define a Loop object to own every segment of the loop that you add
-                   #passing in a Node serves to tell the Loop where it should begin generating on the polymer
-                   #segments of these Loops are connected via normal nodes
-                   
-for i in range(5): #complete this loop with 5 LoopSegments
-  loopseg = poly0.add_loop_segment(10,i+1, loop) #give this LoopSegment 10 atoms and a type i+1
-                                        #and tell it that it is part of the loop called "loop0"
-  loopseg.attach_parent_node(node0) #attach this LoopSegment to node0
-  node0 = poly0.add_node(1) #redefine node0 to be a new Node
-  loopseg0.attach_child_node(node0) #attach this new Node as a child of the current LoopSegment
-loopseg0 = poly0.add_loop_segment(10,i+4, loop0)
-loopseg0.attach_parent_node(node0)
-chain = poly0.add_chain(5,2)
-chain.attach_parent_node(node0)
-loopseg0.attach_child_node(poly0.get_node_by_id(0)) #"come back full circle" as they say, make the original Node
-                                                #of this Polymer the child of this LoopSegment to close the loop
+loopList = []
+    for i in range(NSegments-1):
+      node1 = poly.Node(currAtomType) #Create a Node
+      chain1 = poly.Chain(currAtomType) #Create a Chain
+      loopList.append(node1) #append the Node to a list
+      loopList.append(chain1) #append the Chain to a list. NOTE I did not add the chains and nodes as children of each other.
+      currAtomType += 1
+    
+    node0.add_child( poly.Loop(loopList) )
+
+
+loop0 = Loop(loopList) #Define a Loop object to own every segment of the loop that you add. You pass in a list
+                       #which has the elements that comprise the list in their proper order. These elements
+                       #should not be children of each other, although they can have other children
+node0.add_child(loop0) #Finally assign the node from which this loop will be generated.
 ```
 
 Throughout these examples, I have been using the following functions:
 ##### Box(boxDims, pointSpacing=0.5)
 Constructor of a Box object, this takes the dimensions of the box you will be working with as a list: [Lx, Ly, Lz]  will tell the box to span from -Lx/2:Lx/2, etc...
 pointSpacing is the approximate spacing between the atoms that you desire. I have found that 0.5 works well but if you want your atoms to start closer together or farther apart you may change that parameter.
+
+##### Box.define_atom_type(atomType, mass=1., diameter=1., density=1.)
+Define the parameters associated with the type of the atom - mass, diameter, and density
 
 ##### Box.add_polymer(polymer, startPos=[0,0,0], minDistance=None)
 This function must be called on a box object. It takes a Polymer object to add to the box and a place to start that polymer at, and a minimum distance that the atoms must be spaced from each other, which will default to 0.5* the pointSpacing argument that was provided in the constructor of this Box.
@@ -168,6 +173,7 @@ This function allows you to add discrete individual atoms not bonded to any othe
 
 ##### Box.write_box(outputFileLoc)
 This function writes the box to a LAMMPS data file. This should only be done when all polymers/solvents have been added to it.
+
 
 ##### Polymer(initAtomType)
 Constructor of a polymer, initializes a Polymer object with a single Node of the type provided by initAtomType.
@@ -181,19 +187,28 @@ Adds a loop segment belonging to the Loop "loop". Similar to Polymer.add_chain()
 ##### Polymer.add_node(atomType)
 Adds a Node to a polymer. Returns a Node.
 
-##### Polymer.get_chain_by_id(chainID), Polymer.get_node_by_id(nodeID), Polymer.get_loop_by_id(loopsegID)
+##### Polymer.get_chain_by_id(chainID),
+##### Polymer.get_node_by_id(nodeID)
 returns the object with the specified ID, raises NameError if it is not in Polymer.
 
-##### Chain.attach_parent_node(node)
-Tells a Chain that it stems from node. There can only be one parent of a chain, and it cannot be reset.
 
-##### Chain.attach_child_node(node)
-Tells a Chain that there is another Node attached to the end of it. There can only be one child of a chain, and it cannot be reset.
+##### Chain(chainLen, atomType)
+Returns an instance of Chain with the specified length and atom type.
 
-##### Loop()
+##### Chain.add_child(child)
+Adds a child to this chain. This must be an instance of Node, and there can only be one child attached to it.
+
+
+##### Node(atomType)
+Retuns an instance of Node with the specified atom type
+
+##### Node.add_child(child)
+Adds a child object to this Node. child can be an instance of Node, Chain, or Loop.
+
+
+##### Loop(loopElemsList)
 Initializes a Loop object, for use when you want to add a closed loop to your Polymer.
+loopElemsList should be a list of the Elements that make your Loop, which can be Nodes and Chains. They should NOT however already be attached to each other, although they can be attached to other elements that will not be part of the loop.
 
-##### LoopSegment.attach_parent_node(node), LoopSegment.attach_child_node(node)
-See Chain.attach_parent_node, Chain.attach_child_node
 
-There are more functions but they should not be called by the user, they are used internally.
+There are more functions but they should not be called by the user; they are used internally.

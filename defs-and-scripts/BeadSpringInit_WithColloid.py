@@ -10,7 +10,7 @@
 # import scipy and numpy 
 import numpy as np
 import scipy as sp
-import atomwrite        #  M.S.Shell's Implementation
+#import atomwrite        #  M.S.Shell's Implementation
 import os
 import math
 import sys
@@ -260,7 +260,7 @@ def AtomArange(Lx, Ly, Lz, P, DOP, ns, Rc):
 
         
     
-    InitVis(Pos,Lx,Ly,Lz,P, DOP, ns, Rc)
+    data(Pos,Lx,Ly,Lz,P, DOP, ns, Rc)
     
     
 def InitVis(Pos,Lx,Ly,Lz,P, DOP, ns, Rc):    

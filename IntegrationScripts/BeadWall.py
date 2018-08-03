@@ -62,11 +62,12 @@ def BeadWall():
     ''' LJ Parameters '''
     # LJ 12-6
     E = 1E-4
-    sigma = Rc / (2.**(1./6.))# 16 
-    rcut126 = (2.**(1./6.))*sigma
+    sigma = 1# 16 
+    rcut126 = sigma*2**(1./6.) #cut off at the minimum
    
     y = np.linspace(0.0001,xmax,NumberXpts)
-    y1 = np.linspace(0.0001,Rc,NumberXpts)
+    y1 = np.linspace(0,rcut126,NumberXpts)
+
     Integrand = []
     LJ126 = []
 
@@ -78,6 +79,9 @@ def BeadWall():
     #print prefactor1*prefactor2
     prefactor = 2.*Excee/( (2.*a**2.)**1.5 * math.pi**0.5)
     # Performing the integration at varying distance from the interface
+
+    currentEnergyClosestTo1kT_TANH = 10000
+    currentDistClosestTo1kT_TANH = 0
     for i in y:
         temp = quad(integrand,0,np.inf,args=(i,dw,a, Rc))
         #print temp[0]
@@ -85,6 +89,13 @@ def BeadWall():
         #print temp1
         Integrand.append(temp1)
 
+        if abs(temp1-1) < currentEnergyClosestTo1kT_TANH:
+            currentEnergyClosestTo1kT_TANH = abs(temp1-1)
+            currentDistClosestTo1kT_TANH = i
+
+
+    currentEnergyClosestTo1kT_LJ126 = 10000
+    currentDistClosestTo1kT_LJ126 = 0
     for i in y1:
         ''' LJ-12/6 Interaction '''
         r126min = 2.0**(0.16667)
@@ -92,30 +103,35 @@ def BeadWall():
         if i > rcut126:
             break
         else:
-            temp3 = 4*E*(((i)/sigma)**(-12) - ((i)/sigma)**(-6)) - 4*E*((((rcut126)/sigma)**(-12) - (((rcut126)/sigma)**(-6))))
+            temp3 = 4*E*(((i)/sigma)**(-12) - ((i)/sigma)**(-6)) - 4*E*( ((rcut126)/sigma)**(-12) - ((rcut126)/sigma)**(-6) )
         LJ126.append(temp3)
         
 
+        if abs(temp3-1) < currentEnergyClosestTo1kT_LJ126:
+            currentEnergyClosestTo1kT_LJ126 = abs(temp3-1)
+            currentDistClosestTo1kT_LJ126 = i
+
+    y1 += currentDistClosestTo1kT_TANH - currentDistClosestTo1kT_LJ126
         
-    # Calculate second excluded volume
-    int1 = []
-    int3 = []
+    # Calculate excluded volume
+    # int1 = []
+    # int3 = []
     
-    for i in Integrand:
-        temp1 = (1-np.exp(-1*i))
-        #print temp1
-        int1.append(temp1)
-    for i in LJ126:
-        temp3 = (1-np.exp(-1*i))
-        int3.append(temp3)
+    # for i in Integrand:
+    #     temp1 = (1-np.exp(-1*i))
+    #     #print temp1
+    #     int1.append(temp1)
+    # for i in LJ126:
+    #     temp3 = (1-np.exp(-1*i))
+    #     int3.append(temp3)
         
         
-    IntBeadWall = sp.integrate.simps(int1,y)
-    print "Exc. Vol. Bead-Wall"
-    print IntBeadWall 
-    IntLJ126 = sp.integrate.simps(int3,y1)
-    print "Exc. Vol. LJ-12/6"
-    print IntLJ126
+    # IntBeadWall = sp.integrate.simps(int1,y)
+    # print "Exc. Vol. Bead-Wall"
+    # print IntBeadWall 
+    # IntLJ126 = sp.integrate.simps(int3,y1)
+    # print "Exc. Vol. LJ-12/6"
+    # print IntLJ126
 
     index = np.arange(1,np.shape(y1)[0]+1, dtype=int)
     with open('BeadWallInteraction.txt', 'w') as f:
@@ -139,9 +155,17 @@ def BeadWall():
 
     
     plt.plot(y,Integrand,'b-', y1,LJ126, 'r-')
+    plt.title('Pair Potentials of Colloids and Polymers - Rc={}'.format(Rc))
     plt.ylim(0,Integrand[0]*1.5)
     plt.xlim((0,xmax))
-    plt.savefig('TANH_ColloidInt_And_LJ126_Colloid-AtomInt.png')
+    plt.savefig('TANH_ColloidInt_And_LJ126_Colloid-AtomIntRc-{}.png'.format(Rc))
+    plt.close()
+
+    plt.plot(y,Integrand, 'b-', y1,LJ126, 'r-')
+    plt.title('Pair Potentials of Colloids and Polymers - Rc={}\nzoomed in on intersection point'.format(Rc))
+    plt.ylim(0,5)
+    plt.xlim(0,xmax)
+    plt.savefig('TANH_ColloidInt_And_LJ126_Colloid-AtomInt_intersectionpointRc-{}.png'.format(Rc))
     plt.close()
     
     

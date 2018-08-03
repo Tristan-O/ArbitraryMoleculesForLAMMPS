@@ -16,8 +16,8 @@ import Polymer as poly
 
 def make_dat_file(Lx, Ly, Lz, n_p, n_s=None, N=None, NArms=None, NSegments=None, style=None, outputFile='./polymer0.data'):
 	'''Makes a dat file called polymer0.dat with the parameters that are necessary'''
-	poly0 = poly.Polymer(1) #First node in polymer is an atom of type 1
-	node0 = poly0.get_node_by_id(0) #Get the first node object in the polymer
+	node0 = Node(1) #Make a node object to be the first atom in the polymer
+	poly0 = poly.Polymer(node0) #Make a polymer from that node
 	currAtomType = node0.atom.atomType
 
 	style = style.lower()
@@ -25,26 +25,25 @@ def make_dat_file(Lx, Ly, Lz, n_p, n_s=None, N=None, NArms=None, NSegments=None,
 		if not isinstance(N,int):
 			raise ValueError('Style beadspring requires argument N to be specified as int')
 
-		chain = poly0.add_chain(N-2, currAtomType+1)
-		chain.attach_parent_node(node0)
+		chain = poly.Chain(N-2, currAtomType+1)
+		node0.add_child(chain)
 
-		node1 = poly0.add_node(currAtomType)
-		chain.attach_child_node(node1)
+		node1 = poly.Node(currAtomType)
+		chain.add_child(node1)
 
 	elif style == 'multiblock':
 		if not (isinstance(N, list) or isinstance(N, tuple)):
 			raise ValueError('Style multiblock requires argument N to be a list or a tuple')
 		if isinstance(N, int):
 			N = [N]
+		lastNode = Node(currAtomType)
 		for n in N:
 			currAtomType += 1
-			chain = poly0.add_chain(n-1, currAtomType)
-			chain.attach_parent_node(prevNode)
-			prevNode = poly0.add_node(currAtomType)
-			chain.attach_child_node(prevNode)
-
-		chain = poly0.add_chain(1, poly0.get_node_by_id(0).atom.atomType)
-		chain.attach_parent_node(prevNode)
+			chain = Chain(n-1, currAtomType)
+			node0.add_child(chain)
+			node0 = Node(currAtomType)
+			chain.add_child(node0)
+		node0.add_child(lastNode)
 
 	elif style == 'star':
 		if N==None or (isinstance(N,int) and not isinstance(NArms,int)) and not (isinstance(N,list) or isinstance(N,tuple)):
@@ -54,10 +53,11 @@ def make_dat_file(Lx, Ly, Lz, n_p, n_s=None, N=None, NArms=None, NSegments=None,
 		else:
 			if NArms != None and len(N)!=NArms:
 				print 'WARNING: Ignoring NArms because you passed in a list of a different size'
+
 		for n in N:
 			currAtomType += 1
-			chain = poly0.add_chain(n, currAtomType)
-			chain.attach_parent_node(node0)
+			chain = Chain(n, currAtomType)
+			node0.add_child(chain) #all arms extend from this node
 
 	elif style == 'spine':
 		if not (isinstance(N,int) or isinstance(N,list) or isinstance(N, tuple)) and not isinstance(NArms,int):
@@ -68,40 +68,39 @@ def make_dat_file(Lx, Ly, Lz, n_p, n_s=None, N=None, NArms=None, NSegments=None,
 		else:
 			N =[N]*3
 
-		endchain = poly0.add_chain(N[0]-1, currAtomType)
-		endchain.attach_parent_node(node0)
-		newNode = poly0.add_node(currAtomType)
-		endchain.attach_child_node(newNode)
+		endChain = poly.Chain(N[0]-1, currAtomType)
+		node0.add_child(endChain)
+		newNode = poly.Node(currAtomType)
+		endChain.add_child(newNode)
 
 		for n in range(NArms-1):
-			spinechain = poly0.add_chain(N[1],currAtomType)
-			spinechain.attach_parent_node(newNode)
-			armchain = poly0.add_chain(N[2], currAtomType+1)
-			armchain.attach_parent_node(newNode)
-			newNode = poly0.add_node(currAtomType)
-			spinechain.attach_child_node(newNode)
+			spineChain = poly.Chain(N[1],currAtomType)
+			armChain = poly.Chain(N[2], currAtomType+1)
+			newNode.add_child(spineChain)
+			newNode.add_child(armChain)
+
+			newNode = poly.Node(currAtomType)
+			spineChain.add_child(newNode)
 			
-		armchain = poly0.add_chain(N[2], currAtomType+1)
-		armchain.attach_parent_node(newNode)
-		endchain = poly0.add_chain(N[0],currAtomType)
-		endchain.attach_parent_node(newNode)
+		armChain = poly.Chain(N[2], currAtomType+1)
+		newNode.add_child(armChain)
+
+		endChain = poly.Chain(N[0], currAtomType)
+		newNode.add_child(endChain)
 
 	elif style == 'ring':
 		if not (isinstance(NSegments, int) and isinstance(N, int)):
 			raise ValueError('Style ring requires N,NSegments to be specified as int')
 		
-		loop = poly.Loop(node0)
-		loopseg0 = poly0.add_loop_segment(N-1, currAtomType, loop)
-		loopseg0.attach_parent_node(node0)
+		loopList = []
 		for i in range(NSegments-1):
+			node1 = poly.Node(currAtomType)
+			chain1 = poly.Chain(currAtomType)
+			loopList.append(node1)
+			loopList.append(chain1)
 			currAtomType += 1
-			node0 = poly0.add_node(currAtomType)
-			loopseg0.attach_child_node(node0)
-
-			loopseg0 = poly0.add_loop_segment(N-1, currAtomType, loop)
-			loopseg0.attach_parent_node(node0)
 		
-		loopseg0.attach_child_node(poly0.get_node_by_id(0))
+		node0.add_child( poly.Loop(loopList) )
 	else:
 		raise ValueError('Invalid Style: ' + str(style))
 
@@ -117,7 +116,6 @@ def make_dat_file(Lx, Ly, Lz, n_p, n_s=None, N=None, NArms=None, NSegments=None,
 	box.write_box(outputFile)
 
 	return
-
 
 def clean_log(infileloc, outfileloc, header='Steps Temp KinE PotE TotE Press Vol'):
 	'''Cleans the log so that it can be put into stats.py, header must have same number of columns'''
@@ -145,7 +143,6 @@ def clean_log(infileloc, outfileloc, header='Steps Temp KinE PotE TotE Press Vol
 
 	return np.array(result, float)
 
-
 def do_stats(params_list, infileloc, outfileloc=None):
 	'''Calls stats.py and obtains mean and error on each quantity obtained from lammps simulation, returns list of mean and std dev'''
 	if type(params_list) == type(' '):
@@ -167,7 +164,6 @@ def do_stats(params_list, infileloc, outfileloc=None):
 			f.writelines("%s\n" % stat for stat in stats_data)
 
 	return stats_data
-
 
 def plot_params(outfile, data, stats_data='Steps Temp KinE PotE TotE Press Vol', numcols=None, numrows=None, t_lo=None, t_hi=None, txt = ''):
 	'''Makes several plots vs time of all of the params output by lammps
@@ -241,7 +237,7 @@ def plot_params(outfile, data, stats_data='Steps Temp KinE PotE TotE Press Vol',
 	fig.text(0.5, 0.05, txt, ha='center', fontsize=fontsize)
 	fig.savefig(outfile)#, bbox_inches='tight')
 
-def analyze_dump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES = [2], COLLOID_TYPE = 4, TYPE_IGNORES = [3]): #It would make a lot more sense to just input which bond distances you want by atom type...
+def analyze_dump(infile, style='beadspring', scaledCoords = True, POLY_END_TYPE = 1, POLY_MID_TYPES = [2], COLLOID_TYPE = 4, TYPE_IGNORES = [3]): #It would make a lot more sense to just input which bond distances you want by atom type...
 	'''Analyze an atom-type dump file
 	INPUT:
 		infile: The name of an atom-type dump file generated by LAMMPS
@@ -308,8 +304,10 @@ def analyze_dump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES =
 		temp2 = timestepData.split('ITEM: ATOMS id type xs ys zs')[0].split('ITEM: BOX BOUNDS pp pp pp')[1].split('\n')
 		box = []
 		for i in temp2:
-			if i != '':
-				box.append(i.split())		
+			if i != '' and not scaledCoords:
+				box.append(i.split())	
+			elif i != '' and scaledCoords: #coords runs from 0-1 in every direction
+				box.append( [0,1] )
 
 		for atom_data in temp:
 			# print repr(atom_data)
@@ -333,7 +331,6 @@ def analyze_dump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES =
 	#Now to add neighbors
 	print 'Adding neighbors'
 	if style == 'beadspring':
-
 		polyEnd = False
 		for i in range(len(atoms)):
 			if atoms[i].atomType == POLY_END_TYPE:
@@ -346,10 +343,11 @@ def analyze_dump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES =
 					polyEnd = False
 			elif atoms[i].atomType in POLY_MID_TYPES:
 				atoms[i].addNeighbor(atoms[i+1])
-				atoms[i].addNeighbor(atoms[i-1])
+				# atoms[i].addNeighbor(atoms[i-1])
 			elif atoms[i].atomType not in TYPE_IGNORES:
 				print "WARNING: Atom of unknown type encountered."
 				print "atom ID ", atoms[i].atomID
+
 	elif style == 'colloid':
 		colloids = []
 		for i in range(len(atoms)):
@@ -358,47 +356,44 @@ def analyze_dump(infile, style='beadspring', POLY_END_TYPE = 1, POLY_MID_TYPES =
 				print "Atom ID ", atoms[i].atomID
 			else:
 				colloids.append(atoms[i])
-		for i in colloids:
-			for j in colloids:
-				i.addNeighbor(j)
+		for i in range(len(colloids)):
+			for j in range(i+1, len(colloids)):
+				atoms[i].addNeighbor(atoms[j])
 		atoms = colloids[:]
-
 
 	print 'Calculating distance data of neighbors'
 	#generate distance data of neighbors
-	allNeighbors = []
+	dists = []
 	for i in atoms:
 		for j in i.neighList:
-			if i.atomID < j.atomID: #I do this so that the first element of the tuple is always less than the second, so that I can remove clones later
-					  # because (1,2) != (2,1)
-				neighs = (i.atomID, j.atomID)
-			else:
-				neighs = (j.atomID, i.atomID)
-			# timesteps = len(i.Pos)
 			for k in range(len(i.Pos)):
 				#Find minimum distance - because periodic boundaries are a thing the bond might be across two walls
 				dist = math.sqrt(sum(min( (i.Pos[k][l]-j.Pos[k][l])**2. , (i.Pos[k][l]-i.Box[k][l][0]-j.Pos[k][l]+j.Box[k][l][1])**2., (-i.Pos[k][l]+i.Box[k][l][1]+j.Pos[k][l]-j.Box[k][l][0])**2. ) for l in range(3)))
 				# Pretty sure the above formula is right, it's the distance between atom1 and the wall + the distance between atom2 and the opposite wall
-			allNeighbors.append([neighs,dist])
+				dists.append(dist)
+	# temp = []
 
-	temp = []
-	for neigh in allNeighbors:
-		if neigh not in temp:
-			temp.append(neigh)
-	allNeighbors = temp
+	# for neigh in allNeighbors: #i believe this is unnecessary but to be safe
+	# 	if neigh not in temp:
+	# 		temp.append(neigh)
+	# allNeighbors = temp
 
 	#Finally, generate some histograms
 	#I think I want all distances involved, as well as some individual bond distances vs. time although unless the timesteps are small for this, they are going to be useless
 	print 'Generating plots'
-	dists = []
-	for i in allNeighbors:
-		dists.append(i[1])
+	# dists = []
+	# for i in allNeighbors:
+	# 	dists.append(i[1])
+
 		# if i[1] > 0.5:
 		# 	print i
 	plt.hist(dists, 200)
 	plt.show()
 	plt.hist(dists, 1000)
 	plt.xlim(0,0.2)
+	plt.show()
+
+	plt.plot(dists)
 	plt.show()
 
 
