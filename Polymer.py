@@ -13,7 +13,6 @@ class Box:
 	#This can keep track of polymers, atomIDs and also be used to generate solvents
 	#IDEA: if validating doesn't work out, I can generate a lattice of points that
 	#	   the polymer can be generated on and remove available points as atoms go into them
-	TEST = 0
 	def __init__(self, boxDims, pointSpacing=0.5):
 		if (not isinstance(boxDims, list) and not isinstance(boxDims, tuple)) or any(boxDims[i] <= 0 for i in range(3)):
 			raise TypeError('Object: Box constructor malformed')

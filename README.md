@@ -1,4 +1,4 @@
-# DerjaguinTest1
+# Arbitrary Polymer Architecture Generator for LAMMPS
 
 These are tools I am developing for use in conjunction with LAMMPS. Polymer.py gives a user the ability to generate arbitrarily complex polymer structures and write those out to LAMMPS data files. This currently only has support for generating atoms and bonds, but I am planning to give it the ability to add angles, dihedrals and more soon. Simulation_Tools.py provides some tools for analyzing data output by LAMMPS and also contains some pre-defined polymer structures that may be useful for a user (currently beadspring, multiblock, spine and ring). Look in exampleUsage/ for an example of how to use simulationTools.py and Polymer.py to generate and analyze LAMMPS data, or continue reading.
 

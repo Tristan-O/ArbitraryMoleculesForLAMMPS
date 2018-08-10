@@ -3,5 +3,6 @@
 !.gitignore
 !readme.md
 !.gitkeep
-!*.py
-!*/
+!Polymer.py
+!Simulation_Tools.py
+!exampleUsage.py
