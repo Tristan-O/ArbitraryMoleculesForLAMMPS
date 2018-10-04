@@ -4,7 +4,7 @@
 #	  and then the box would know how many polymers, how much "volume" they will take, could even possibly
 #	  do something fancy with splitting the polymers into smaller boxes or something
 #	- Look at scipy, they have a whole spatial module that could help with placing atoms. See KDTree
-
+import random
 import math
 import numpy as np
 from numpy import linalg as LA
@@ -16,7 +16,7 @@ class Box:
 	def __init__(self, boxDims, pointSpacing=0.5):
 		if (not isinstance(boxDims, list) and not isinstance(boxDims, tuple)) or any(boxDims[i] <= 0 for i in range(3)):
 			raise TypeError('Object: Box constructor malformed')
-		self.boxDims = boxDims[:]
+		self.boxDims = np.copy(boxDims)
 		for i in range(3):
 			self.boxDims[i] = self.boxDims[i] / 2.
 		self.currentAtomID = 1
@@ -25,103 +25,44 @@ class Box:
 		self.bondList = []
 		self.pointSpacing = float(pointSpacing) #must be a float because I sometimes scale by this factor
 		self.numPolymers = 0
+		self.polymerList = []
 
-		numPointsX = 2.*self.boxDims[0]/self.pointSpacing
-		numPointsY = 2.*self.boxDims[1]/self.pointSpacing
-		numPointsZ = 2.*self.boxDims[2]/self.pointSpacing
-		self.latticePoints = np.zeros((numPointsX,numPointsY,numPointsZ,2)) # make 4D array
-			# 3Dims to represent points
-			# 1Dim to represent spatial point-tuple and atomType of atom occupying that point
-			# This will keep track of what points atoms have occupied (including points occupied by an atom's volume)
-		for i in range(numPointsx):
-			for j in range(numPointsY):
-				for k in range(numPointsZ):
-					self.latticePoints[i,j,k,0] = (numPointsX*self.pointSpacing-self.boxDims[0],
-													numPointsY*self.pointSpacing-self.boxDims[1],
-													numPointsZ*self.pointSpacing-self.boxDims[2])
-					self.latticePoints[i,j,k,1] = -1 # -1 is not a valid atom type in LAMMPS, this represents an open points (not occupied by any atom)
+		numPointsX = int(2.*self.boxDims[0]/self.pointSpacing)
+		numPointsY = int(2.*self.boxDims[1]/self.pointSpacing)
+		numPointsZ = int(2.*self.boxDims[2]/self.pointSpacing)
+
+		self.lat_points_x = np.linspace(-0.95*self.boxDims[0],0.95*self.boxDims[0],numPointsX)
+		self.lat_points_y = np.linspace(-0.95*self.boxDims[1],0.95*self.boxDims[1],numPointsY)
+		self.lat_points_z = np.linspace(-0.95*self.boxDims[2],0.95*self.boxDims[2],numPointsZ)
+		#print len(self.lat_points_z), numPointsZ, self.pointSpacing, self.lat_points_z
+
+		self.occupiedPoints = []
 
 		self.atomTypes = {}
+
+		self.numSpherePoints = 50
 
 	def define_atom_type(self, atomType, mass=1., diameter=1., density=1.):
 		if not isinstance(atomType, int): #in case the user gives a string or float or something
 			atomType = int(atomType)
 		self.atomTypes[atomType] = {'mass':mass, 'diameter':diameter, 'density':density}
-		return
-
-	def add_solvents(self, numSolvents, solventType, minDistance=0.5):
-		MAX_NUM_FOR_CHECKING = 100000
-		print 'Adding solvents'
-		if numSolvents < 1:
-			raise ValueError('Cannot generate less than one solvent')
-		elif numSolvents > MAX_NUM_FOR_CHECKING:
-			print "WARNING: Too many solvents to do rigorous checking of placement (computational expense)"
-
-		atomList = []
-		for solventNum in range(numSolvents):
-			atomList.append( Atom(self, solventType) )
-
-		#Assign positions to solvents
-		LatScale = 0.9
-		Lx = self.boxDims[0]
-		Ly = self.boxDims[1]
-		Lz = self.boxDims[2]
-		rx = np.linspace(-LatScale*Lx, LatScale*Lx, math.ceil(numSolvents**(1./3.)), dtype=float)
-		ry = np.linspace(-LatScale*Ly, LatScale*Ly, math.ceil(numSolvents**(1./3.)), dtype=float)
-		rz = np.linspace(-LatScale*Lz, LatScale*Lz, math.ceil(numSolvents**(1./3.)), dtype=float)
-
-		i=0
-		for x in rx:
-			for y in ry:
-				for z in rz:
-					Pos = np.array([x,y,z], float)
-					# add a random offset to help initial minimization.
-					spread = 0.5
-					foundGoodPos = False
-					notGoodCounter = 0
-					while not foundGoodPos:
-						notGoodCounter += 1
-						foundGoodPos = True
-
-						if notGoodCounter >= 5000:
-							spread += 0.5
-							print "Having trouble placing atom... Going to try increasing the allowed random spread to: {}".format(spread)
-							if spread > 5*self.pointSpacing:#don't want atoms getting too far apart
-								spread = 0.
-			
-						Pos += spread*( np.random.random(3)-0.5 )
-						if numSolvents < MAX_NUM_FOR_CHECKING:
-							for j in self.occupiedPoints:
-								dist = LA.norm(j-Pos)
-								if dist < minDistance:
-									foundGoodPos = False
-									break
-						for j in range(3):
-							if abs(Pos[j]) > self.boxDims[j]:#if atom is outside of box, change to move in a random direction
-								foundGoodPos = False
-							# elif spread > self.boxDims[j]:
-							# 	print 'Something went wrong with placing a solvent... I will try again'
-							# 	spread = 0
-					atomList[i].pos = Pos[:]
-					self.atomList.append(atomList[i])
-					i += 1
-					# if done placing atoms, return.
-					if i >= numSolvents:
-						break
-				if i >= numSolvents:
-					break
-			if i >= numSolvents:
-				break	
-
-		for atom in atomList:
-			try:
-				self.occupiedPoints = np.vstack([self.occupiedPoints, atom.pos[:]])
-			except ValueError: #Thrown if occupiedPoints is empty
-				self.occupiedPoints = Pos[:]		
+		return	
 
 	def write_box(self, outputFileLoc):
 		'''Write everything in this box to LAMMPS data file'''
+		print
+		print 'If you have trouble writing polymers to a box, try increasing the box size and then using the LAMMPS command fix deform to shrink box to smaller size.'
+		#sort polymers by largest average bead size first
+		polymersGenerated = []
+
+		for i,polymer in enumerate(self.polymerList):
+			# assign positions to every atom
+			polymersGenerated.append(polymer)
+			self.generate(polymer, polymerNeighbors=polymersGenerated) #fills atomList, bondList and assigns positions to those atoms
+			print 'Polymer {} successfully added'.format(i+1)
+
 		print 'Writing box to file'
+		print len(self.atomList),"atoms"
 		with open(str(outputFileLoc), "wb") as f:
 	    
 		    #LAMMPS DESCRIPTION:
@@ -133,10 +74,6 @@ class Box:
 			f.write("0 angles\n")
 			f.write("0 dihedrals\n")
 			f.write("0 impropers\n")
-		    
-			for i in self.atomList:
-				if i.atomType not in self.atomTypes.keys():
-					self.define_atom_type(i.atomType) #initialize default values for this atomType
 
 			bondTypes = []
 			for i in self.bondList:
@@ -167,16 +104,21 @@ class Box:
 		    # ATOMS: ***************************************************************************
 			f.write("\nAtoms\n")
 			f.write("\n")
-			i=0
-			for atom in self.atomList:
-				i+=1 # Atom ID
-				atom.atomID = i
+
+			for i,atom in enumerate(self.atomList):
+				atom.atomID = i+1
 				f.write("%i %i " % (atom.atomID, atom.atomType))
-				f.write("%2.6f %2.6f %2.6f " % (atom.pos[0], atom.pos[1], atom.pos[2])) # positions, using old string format because I dont want to get rid of it
+				f.write("%3.5f %3.5f %3.5f " % (atom.pos[0], atom.pos[1], atom.pos[2])) # positions, using old string format because I dont want to get rid of it
+
 				f.write("{} ".format(atom.moleculeID)) # molecular tag ***************######################################################################################
 				f.write("{} ".format(self.atomTypes[atom.atomType]['diameter'])) # diameter
 				f.write("{} ".format(self.atomTypes[atom.atomType]['density'])) # density
 				f.write("0 0 0\n")
+
+				#print len(atom.bondList)
+				# for b in atom.bondList:
+				# 	if b not in self.bondList:
+				# 		self.bondList.append(b)
 
 		    # BONDS: *******************************************************************************
 			if len(self.bondList)>0:
@@ -192,6 +134,8 @@ class Box:
 				i=0
 				for bond in self.bondList:
 					i+=1
+					#print len(self.bondList)
+					#print bond.atom1.parent.parent
 					f.write("%i " % i)
 					f.write("%i " % bondDict[bond.bondType]) # the bond is hydrophobic-to-philic
 					f.write("%i %i\n" % (bond.atom1.atomID, bond.atom2.atomID)) 
@@ -199,180 +143,229 @@ class Box:
 				print "Bond types and their corresponding atom type definitions:"
 				print bondDict
 
-	def add_semi_rand_pos(self, atom, prevPos1, prevPos2, minDistance):
-		spread = 0.5
-		foundGoodPos = False
-		notGoodCounter = 0
-		while not foundGoodPos:
-			notGoodCounter += 1
-			foundGoodPos = True
+	@staticmethod
+	def dist(r1,r2):
+		r=[]
+		for i,_ in enumerate(r1):
+			r.append(r1[i]-r2[i])
+		return LA.norm(r)
 
-			if notGoodCounter >= spread*5000:
-				spread += 0.5
-				print "Having trouble placing atom... Going to try increasing the allowed random spread to: ",spread
-			# randDirection = np.random.multivariate_normal(forwardVec, cov)
-			# randDirection = randDirection * self.pointSpacing / LA.norm(randDirection)
-			#find forward direction
-			forwardVec = prevPos1[:] - prevPos2[:] + spread*( np.random.random(3)-0.5 )
-			#scale forward direction to maintain desired density
-			forwardVec *= self.pointSpacing/LA.norm(forwardVec)
-			atom.pos = prevPos1 + forwardVec
-			for i in self.occupiedPoints:
-				dist = LA.norm(i-atom.pos)
-				if dist < minDistance:
-					foundGoodPos = False
-			for i in range(3):
-				if abs(atom.pos[i]) > 0.9*self.boxDims[i]:#if atom is outside of box, change to move in a random direction
-					foundGoodPos = False
-					prevPos2 = np.random.random(3) + prevPos1
-				if spread > self.boxDims[i]:
-					print 'Something went wrong with placing... I will try again'
-					spread = 0
+	def sphere_of_points(self, center, num_pts, radius):
+		#https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere/26127012#26127012
 
-		prevPos2 = prevPos1[:]
-		prevPos1 = atom.pos[:]
-		try:
-			self.occupiedPoints = np.vstack([self.occupiedPoints, atom.pos[:]])
-		except ValueError: #Thrown if occupiedpoints is empty
-			self.occupiedPoints = atom.pos[:]
-		return (prevPos1, prevPos2)
+		#num_pts = int(4.*math.pi*Rc**2.) # Number of area units on sphere
+		indices = np.arange(0, num_pts, dtype=float) + 0.5
 
-	def generate(self, obj, prevPos1, prevPos2, minDistance, loop=None):
-		#recursively add polymer stuff
-		#assign positions to atoms of obj
+		phi = np.arccos(1 - 2*indices/num_pts)
+		theta = math.pi * (1. + 5.**0.5) * indices
+
+		points = np.transpose(np.array([(radius+0.01) * np.cos(theta) * np.sin(phi), (radius+0.01) * np.sin(theta) * np.sin(phi), (radius+0.01) * np.cos(phi)]))
+		return center + points
+
+	def outsideBox(self, pnt):
+		for i in range(3):
+			if pnt[i]>0.9*self.boxDims[i] or pnt[i]<-0.9*self.boxDims[i]:
+				return True
+		else:
+			return False
+
+	def generate(self, obj, prevPos1=None, prevradius=0, polymerNeighbors=[], loop=False, startPos=None):
+		# recursively build polymer
+		# assign positions to atoms of obj
+
+		# do this by choosing N points the correct distance from the center of the previous atom,
+		#	then  choose the point with the least overlap between the new atom and already occupied lattice points
+
 		if obj == None:
 			return
 
-		if isinstance(obj, Node):
-			atomList = [ obj.atom ]
-		else:
-			atomList = obj.atomList
+		# if prevPos1 == None:
+		# 	print obj
+		if isinstance(obj, Polymer):
+			if obj.startPos == None:
+				x = random.choice(self.lat_points_x)
+				y = random.choice(self.lat_points_y)
+				z = random.choice(self.lat_points_z)
+				while not [x,y,z] not in self.occupiedPoints and not self.outsideBox([x,y,z]):#choose some random unoccupied spot
+					x = random.choice(self.lat_points_x)
+					y = random.choice(self.lat_points_y)
+					z = random.choice(self.lat_points_z)
+				prevPos1 = [x,y,z]
+				obj.startPos = [x,y,z]
+			else:
+				prevPos1 = np.copy(obj.startPos)
 
+			#find neighbor polymers
+			actualNeighbors = []
+			for possibleNeigh in polymerNeighbors:
+				if Box.dist(possibleNeigh.startPos, obj.startPos) < math.sqrt(float(possibleNeigh.length))+math.sqrt(float(obj.length)):
+					actualNeighbors.append(possibleNeigh)
+
+			polymerNeighbors = actualNeighbors
+
+			atomList=[]
+			obj=obj.nodeList[0]
+			obj.atom.pos = np.copy(prevPos1)
+			if obj.atom.atomType not in self.atomTypes.keys():
+				self.define_atom_type(obj.atom.atomType)
+
+
+		elif isinstance(obj, Node):
+			atomList = [ obj.atom ]
+		elif isinstance(obj, Chain):
+			atomList = obj.atomList
+		else:
+			atomList = []
+		
+		# minOverlapPnt = np.array([0,0,0])
+		startPos_2 = np.copy(prevPos1)
 		for atom in atomList:
-			prevPos1, prevPos2 = self.add_semi_rand_pos(atom, prevPos1, prevPos2, minDistance)
-			self.polymerAtomList.append(atom)
+			#find a free spot in lattice
+			if atom.atomType not in self.atomTypes.keys():
+				self.define_atom_type(atom.atomType)
+			radius = self.atomTypes[atom.atomType]['diameter']/2.
+			netRadius = radius + prevradius
+			prevradius = radius
+
+			prevPos1 = np.array(prevPos1)
+
+			#then find the position with the minimum amount of overlap in occupied points
+			minOverlapPnt = None
+			minOverlap = None
+
+			sphereOfPoints = self.sphere_of_points(prevPos1, self.numSpherePoints, netRadius)
+			if not loop:
+				np.random.shuffle(sphereOfPoints)
+			else:
+				sphereOfPoints = list(sphereOfPoints)
+				sphereOfPoints.sort(key = lambda p: ((p[0]-startPos[0])**2+(p[1]-startPos[1])**2+(p[2]-startPos[2])**2))
+
+			for i,spherePoint in enumerate(sphereOfPoints):
+				# for each point on the sphere of possible points to choose, 
+				# pick the one with the least overlap of occupied points on the lattice
+
+				if self.outsideBox(spherePoint):
+					# dont generate atoms outside of box
+					# This can cause issues if every point on the sphere is outside of the box, 
+					# so there is a check farther down to see if minOverlap was ever set
+					continue
+
+				tempCount = 0
+				for poly in polymerNeighbors:
+					for a in poly.atomList:
+						try:
+							if Box.dist(a.pos, spherePoint) < self.atomTypes[a.atomType]['diameter']/2.+radius:
+								tempCount += 1#./Box.dist(spherePoint,startPos)
+						except TypeError: #atom.pos possibly not specifed yet in current polymer
+							continue
+
+				# find minimum overlap point
+				if minOverlap == None:
+					minOverlapPnt = np.copy(spherePoint)
+					minOverlap = tempCount
+				elif tempCount < minOverlap:
+					minOverlap=tempCount
+					minOverlapPnt = np.copy(spherePoint)
+
+			if minOverlap == None:
+				# failed to find a good point to place the atom
+				# try again with a larger radius
+				# see the outside box check above
+				print 'regenerating...'
+				return self.generate(obj, startPos_2, netRadius, polymerNeighbors, loop=loop, startPos=startPos)
+				
+
+			#being safe with pass by reference bs, just np.copy()'ing everything
+			atom.pos = np.copy(minOverlapPnt)
+			minOverlapPnt = list(np.copy(minOverlapPnt))
+
+			#set affected lattice points to be occupied
+			sublatticeX = []
+			sublatticeY = []
+			sublatticeZ = []
+			for tempx in self.lat_points_x:
+				if tempx>minOverlapPnt[0]-radius and tempx<minOverlapPnt[0]+radius:
+					sublatticeX.append(tempx)
+			for tempy in self.lat_points_y:
+				if tempy>minOverlapPnt[1]-radius and tempy<minOverlapPnt[1]+radius:
+					sublatticeY.append(tempy)
+			for tempz in self.lat_points_z:
+				if tempz>minOverlapPnt[2]-radius and tempz<minOverlapPnt[2]+radius:
+					sublatticeZ.append(tempz)
+			for x in sublatticeX:
+					for y in sublatticeY:
+						for z in sublatticeZ:
+							if Box.dist([x,y,z],prevPos1) <radius:
+								self.occupiedPoints.append([x,y,z])
+
+			prevPos1 = np.copy(np.array(minOverlapPnt)) #last location an atom was placed
 
 		#test if there are children remaining in the tree (polymer is like a tree data structure)
+		
 		if isinstance(obj, Node):#if there are, call this function again on each of those children
 			for child in obj.children:
 				if isinstance(child, Chain) or isinstance(child, Node):
-					self.generate(child, prevPos1[:], prevPos2[:], minDistance)
+					self.generate(child, np.copy(prevPos1[:]), prevradius, polymerNeighbors)
 					#important that these lists are not passed by reference if there's ever two chains attached to one node
 				elif isinstance(child, Loop): #elif (objChild.loop.nodeParentSuper == obj and not objChild.loop.built) or objChild.loop == loop: #Only begin to generate this loop if you are starting at the loop's beginning or in the process of generating it
-					self.generate_closed_loop(child, prevPos1[:], minDistance)
+					# self.generate_closed_loop(child, np.copy(prevPos1[:]),prevradius, polymerNeighbors)
+					loopStart= np.copy(prevPos1)
+					for loopChild in child.loopElems:
+						prevPos1 = self.generate(loopChild, prevPos1, prevradius, polymerNeighbors, loop=True, startPos=loopStart) #loopStart is passed by reference, changes every iteration
 				else:
 					raise ValueError('Object: Node has a child that is not of the correct type')
 		elif isinstance(obj, Chain):
-			self.generate(obj.child, prevPos1[:], prevPos2[:], minDistance)
+			self.generate(obj.child, prevPos1, prevradius, polymerNeighbors)
 
-	def generate_closed_loop(self, loop, prevPos, minDistance):
-		#choose random direction, this will point to circle center
-		#loop.center will be this
-		Positions = []
-		circleRadius = loop.numAtoms*self.pointSpacing/2./math.pi
-		randDirection = np.random.random(3)-0.5
-		randDirection /= LA.norm(randDirection)
 
-		A = prevPos / LA.norm(prevPos)
-		C = np.cross(A,randDirection)#random vector perpendicular to A
-		
-		B = np.cross(A,C)
-		B /= LA.norm(B)
+		return prevPos1
 
-		for i in range(loop.numAtoms): 
-			theta = 2.*math.pi*(i+1.)/(loop.numAtoms+1.)
-			Pos = circleRadius*(math.cos(theta)-1)*A + circleRadius*math.sin(theta)*B + prevPos
-			foundGoodPos = False
-			while not foundGoodPos:
-				foundGoodPos = True
-				for j in self.occupiedPoints:
-					dist = LA.norm(j-Pos)
-					if dist < minDistance:
-						foundGoodPos = False
-						Pos += 2.*(np.random.random(3)-0.5)
-				for j in range(3):
-					if Pos[j] > 0.9*self.boxDims[j]:#if atom is outside of box, change to move in a random direction
-						foundGoodPos = False
-						Pos[j]= 0.9*self.boxDims[j] - np.random.random()
-					elif Pos[j] < -0.9*self.boxDims[j]:#if atom is outside of box, change to move in a random direction
-						foundGoodPos = False
-						Pos[j]= -0.9*self.boxDims[j] + np.random.random()
-			loop.atomList[i].pos = Pos
-			self.occupiedPoints = np.vstack([self.occupiedPoints, Pos])
-			self.polymerAtomList.append(loop.atomList[i])
-
-		for obj in loop.loopElems:
-			if isinstance(obj, Chain): #technically this check is unneccessary, since a Chain can only have one child and that child by continuation is in the Loop
-				children = [obj.child]
-				pos1 = obj.atomList[-1].pos[:] #atom.pos was set earlier in this function
-			elif isinstance(obj, Node):
-				children = obj.children
-				pos1 = obj.atom.pos[:]
-			for child in children:
-				if child == loop:
-					continue
-				if child not in loop.loopElems and child != None:
-					pos2 = prevPos - circleRadius*A #center of the circle
-					self.generate(child, pos1[:], pos2[:], minDistance)#child is told to generate away from center of loop circle, this might be a problme though if the circle clips the edge of the box...
-
-	def add_polymer(self, polymer, startPos=[0,0,0], minDistance=None):
+	def add_polymer(self, polymer, startPos=None):
 		'''Adds a list of atoms for this polymer, which have Position, Type and ID information
 		startPos is the starting point for this polymer to be built
 		boxDims is the three side lengths of the box
 		This assumes that the origin of the box is in the center'''
-		#Make sure polymer is ready to be written
-		if not isinstance(polymer, Polymer):
-			raise TypeError('Object: Box add_polymer call malformed')
-		if minDistance == None:
-			minDistance=self.pointSpacing/2.#this used to be an argument to this function and I'm too lazy to replace it with self.pointSpacing everywhere so I'm just redefining it here
-		for i in range(3):
-			if abs(startPos[i]) >= 0.9*self.boxDims[i]:
-				s='xyz'
-				raise ValueError('Object: Box cannot add polymer at '+s[i]+'='+str(startPos[i])+' when the box dimensions are +/-'+str(self.boxDims[i]))
-		foundGoodPos = False
-		while foundGoodPos:
-			foundGoodPos = True
-			for j in self.occupiedPoints:
-				dist = LA.norm(j-startPos)
-				if dist < minDistance:
-					foundGoodPos = False
-					startPos += (np.random.random(3)-0.5)
+		#Objects are pass by reference, make clone
 
-		self.numPolymers += 1
-		self.polymerAtomList = []
-		print 'Adding polymer'
+		polymerClone = polymer.clone()
+		polymerClone.startPos=startPos
+		self.polymerList.append(polymerClone)
 
-		startPos = np.array(startPos)
-			
-		forwardVec = np.random.random(3) - 0.5
-		forwardVec = forwardVec / LA.norm(forwardVec)
-		self.generate(polymer.nodeList[0], startPos, startPos+forwardVec, minDistance)
+		polymerClone.atomList = []
 
-		#clone atoms and bonds in this box so that changes to them in the polymer object will not affect the ones present in the box:
-		atomList = []
-		temp = []
+		children = [polymerClone.nodeList[0]]
+		while children:
+			child = children[0]
+			del children[0]
+			if isinstance(child,Node):
+				#print child.atom.bondList
+				children += child.children
+				polymerClone.atomList.append(child.atom)
 
-		for atom in self.polymerAtomList:
-			clone = atom.clone()
-			clone.moleculeID = self.numPolymers
-			clone.parent = self
-			atomList.append(clone)
-			self.atomList.append(clone)
+			elif isinstance(child, Chain):
+				polymerClone.atomList += child.atomList
+				if child.child != None:
+					children += [child.child]
 
-		bondList = []
-		temp = []
-		for atom in self.polymerAtomList: #clone bonds over
+			elif isinstance(child, Loop):
+				children += child.loopElems
+				continue
+
+			else:
+				continue
+
+		self.atomList += polymerClone.atomList
+		tempBondList = [] #for speed, bonds are never going to appear the
+		# same between polymers so I will just check for this polymer's bonds
+		for atom in polymerClone.atomList:
 			for bond in atom.bondList:
-				if bond not in bondList:
-					for clone in atomList:
-						if bond.atom1.cloneID == clone.cloneID:
-							atom1 = clone
-						elif bond.atom2.cloneID == clone.cloneID:
-							atom2 = clone
-					self.bondList.append( Bond(atom1, atom2) )#adds this bond to both atom1 and atom2, which are clones, and these bonds are now children of this box
-					bondList.append(bond) #since bond is known to two atoms by definition, we don't want it to get written twice
-		#self.bondList = temp
+				if bond not in tempBondList:
+					tempBondList.append(bond)
+		self.bondList+=tempBondList
 
+		# assign molecule IDs (not sure what these are used for but whatever)
+		for atom in polymerClone.atomList:
+			atom.moleculeID = len(self.polymerList)
 
 class Polymer:
 	def __init__(self, node0):
@@ -380,32 +373,39 @@ class Polymer:
 			raise TypeError('Object: Polymer constructor malformed')
 		self.chainList = []
 		self.nodeList = []
-		self.add_node(node0)
-		self.set_parent(node0)
 		self.loopList = []
 		self.bondList = []
+		self.length = 0 #1 added at set_parent below
+		# self.add_node(node0)
+		self.set_parent(node0)
 
-	def add_chain(self, chain):
-		self.chainList.append( chain )
 
-	def add_node(self, node):
-		self.nodeList.append( node )
+	# def add_chain(self, chain):
+	# 	self.chainList.append( chain )
+
+	# def add_node(self, node):
+	# 	self.nodeList.append( node )
  
-	def add_loop(self, loop):
-		self.loopList.append( loop )
+	# def add_loop(self, loop):
+	# 	self.loopList.append( loop )
 
 	def set_parent(self, obj):
+		if obj == None:
+			return
 		if obj.parent == self:
 			return
 		elif isinstance(obj, Chain):
 			children = [obj.child]
 			self.chainList.append(obj)
+			self.length += obj.chainLen
 		elif isinstance(obj, Node):
 			children = obj.children
 			self.nodeList.append(obj)
+			self.length += 1
 		elif isinstance(obj, Loop):
 			children = obj.loopElems
 			self.loopList.append(obj)
+			#because of the way children are set, don't need to add to length here
 		else:
 			return
 
@@ -418,6 +418,10 @@ class Polymer:
 
 	def get_node_by_id(self, nodeID):
 		return self.nodeList[nodeID]
+
+	def clone(self):
+		node0 = self.nodeList[0].clone()
+		return Polymer(node0)
 
 
 class Chain:
@@ -450,6 +454,18 @@ class Chain:
 		if self.parent != None:
 			self.parent.set_parent(child)
 
+	def add_bond(self,obj):
+		if isinstance(obj,Node):
+			Bond(self.atomList[-1], obj.atom)
+		elif isinstance(obj,Chain):
+			Bond(self.atomList[-1], obj.atomList[0])
+
+	def clone(self):
+		myClone = Chain(self.chainLen, self.atomType)
+		if self.child != None:
+			myClone.add_child(self.child.clone())
+		return myClone
+
 
 class Loop:
 	def __init__(self, loopElemList):
@@ -458,8 +474,8 @@ class Loop:
 		self.atomList = [ ]
 		for i in range(len(loopElemList)):
 			#self.loopElems.append(loopElemList[i])
-			if len(loopElemList) > 1 and i != len(loopElemList) -1:
-				self.loopElems[i].add_child(self.loopElems[i+1])
+			if len(loopElemList) > 1 and i != len(loopElemList)-1:
+				self.loopElems[i].add_bond(self.loopElems[i+1])
 
 			if isinstance(loopElemList[i], Chain):
 				self.numAtoms += loopElemList[i].chainLen
@@ -469,6 +485,12 @@ class Loop:
 				self.numAtoms += 1
 				self.atomList.append(loopElemList[i].atom)
 		self.Positions = []
+
+	def clone(self):
+		cloneList = []
+		for elem in self.loopElems:
+			cloneList.append(elem.clone())
+		return Loop(cloneList)
 
 
 class Node:
@@ -489,13 +511,27 @@ class Node:
 		if isinstance(child,Node):
 			Bond(self.atom, child.atom)
 		elif isinstance(child,Chain):
-			Bond(self.atom, child.atomList[-1])
+			Bond(self.atom, child.atomList[0])
 		elif isinstance(child, Loop):
-			child.startNode = node0
+			# child.startNode = node0
 			Bond(self.atom, child.atomList[0])
 			Bond(self.atom, child.atomList[-1])
 		if self.parent != None:
 			self.parent.set_parent(child)
+
+	def add_bond(self, obj):
+		if isinstance(obj,Node):
+			Bond(self.atom, obj.atom)
+		elif isinstance(obj,Chain):
+			Bond(self.atom, obj.atomList[0])
+
+
+	def clone(self):
+		myClone = Node(self.atom.atomType)
+		for child in self.children:
+			childClone = child.clone()
+			myClone.add_child(childClone)
+		return myClone
 
 
 class Bond:
@@ -513,26 +549,28 @@ class Bond:
 		atom1.bondList.append(self)
 		atom2.bondList.append(self)
 
+
 class Atom:
-	currentCloneID = 0
+	# currentCloneID = 0
 	def __init__(self, parent, atomType):
 		if (not isinstance(parent, Box) and not isinstance(parent, Chain) and not isinstance(parent, Node)) or not isinstance(atomType, int):
 			raise TypeError('Object: Atom constructor malformed')
 		self.parent = parent
 		self.atomType = atomType
-		self.pos = None#np.array([])
+		self.pos = None
 		self.bondList = []
 		self.moleculeID = -1
 
-	def clone(self):
-		clone = Atom(self.parent, self.atomType)
-		clone.pos = self.pos[:]
-		clone.bondList = [] #empty on purpose
-		self.cloneID = Atom.currentCloneID
-		clone.cloneID = Atom.currentCloneID
-		Atom.currentCloneID += 1
-		#print Atom.currentCloneID
-		return clone
+	# def clone(self):
+	# This is the old way of copying polymers over
+	# 	clone = Atom(self.parent, self.atomType)
+	# 	clone.pos = self.pos[:]
+	# 	clone.bondList = [] #empty on purpose
+	# 	self.cloneID = Atom.currentCloneID
+	# 	clone.cloneID = Atom.currentCloneID
+	# 	Atom.currentCloneID += 1
+	# 	#print Atom.currentCloneID
+	# 	return clone
 
 
 
@@ -604,13 +642,27 @@ if __name__ == '__main__':
 	node0.add_child( Chain(5,3) )
 	node0.add_child( Loop(loopList) )
 
-	box = Box([100,100,100], pointSpacing=2) #Initialize a 100x100x100 box
-	box.add_polymer(poly0, startPos=[-35,0,0]) #create that polymer one time in the box, starting at the position (-35,-35,-35)
-	#box.add_polymer(poly1, startPos=[ 35, 35, 35]) 
+	node0 = Node(1)
+	poly1 = Polymer(node0)
+	chain = Chain(5,2)
+	node0.add_child( chain )
+	node0.add_child( Chain(5,3))
+	node1 = Node(1)
+	chain.add_child( node1 )
+	node1.add_child( Chain(5,4))
+
+	node0 = Node(1)
+	poly0 = Polymer(node0)
+	node1 = Node(3)
+	node0.add_child( Loop([Chain(5,2),node1,Chain(5,2)]) )
+
+
+	box = Box([100,100,100]) #Initialize a 100x100x100 box
+	box.add_polymer(poly0, startPos=[0,0,0]) #create that polymer one time in the box, starting at the position (-35,-35,-35)
+	box.add_polymer(poly1, startPos=[ 35, 35, 35]) 
 	box.add_polymer(poly2, startPos=[ 35,-35,-35])
 	box.add_polymer(poly3, startPos=[ 35, 35,-35])
-	#box.add_solvents(100, 3) #generate solvents in the box
 
-	box.write_box('./polymer0.data')
+	box.write_box('./other-scripts/polymer0.data')
 	import subprocess as prcs
-	simulate_str = prcs.check_output("./other-scripts/lmp_serial -sf omp -pk omp 4 -in ./other-scripts/polymer.in")
+	simulate_str = prcs.check_output("./other-scripts/lmp_serial.exe -in ./other-scripts/polymer.in")
