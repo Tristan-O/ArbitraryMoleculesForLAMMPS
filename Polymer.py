@@ -25,7 +25,22 @@ class Box:
 		self.bondList = []
 		self.pointSpacing = float(pointSpacing) #must be a float because I sometimes scale by this factor
 		self.numPolymers = 0
-		self.occupiedPoints = np.array([])
+
+		numPointsX = 2.*self.boxDims[0]/self.pointSpacing
+		numPointsY = 2.*self.boxDims[1]/self.pointSpacing
+		numPointsZ = 2.*self.boxDims[2]/self.pointSpacing
+		self.latticePoints = np.zeros((numPointsX,numPointsY,numPointsZ,2)) # make 4D array
+			# 3Dims to represent points
+			# 1Dim to represent spatial point-tuple and atomType of atom occupying that point
+			# This will keep track of what points atoms have occupied (including points occupied by an atom's volume)
+		for i in range(numPointsx):
+			for j in range(numPointsY):
+				for k in range(numPointsZ):
+					self.latticePoints[i,j,k,0] = (numPointsX*self.pointSpacing-self.boxDims[0],
+													numPointsY*self.pointSpacing-self.boxDims[1],
+													numPointsZ*self.pointSpacing-self.boxDims[2])
+					self.latticePoints[i,j,k,1] = -1 # -1 is not a valid atom type in LAMMPS, this represents an open points (not occupied by any atom)
+
 		self.atomTypes = {}
 
 	def define_atom_type(self, atomType, mass=1., diameter=1., density=1.):
@@ -528,18 +543,30 @@ if __name__ == '__main__':
 
 	node0 = Node(1) #Get the first node object in the polymer 
 	poly0 = Polymer(node0) #First node in polymer is an atom of type 1
-	chain0 =  Chain(10, 2) #Generate a chain of len 10 and atom type 2
-	node0.add_child(chain0) #Attach chain0 to node0
 
+	NArms = 4
+	N = 3*[4]
+	currAtomType = 1
 
-	node1 = Node(1)
-	node0.add_child(node1)
+	endChain = Chain(N[0]-1, currAtomType)
+	node0.add_child(endChain)
+	newNode = Node(currAtomType)
+	endChain.add_child(newNode)
 
-	chain1 = Chain(5, 2) #Generate a chain of len 10 and atom type 3
-	node1.add_child(chain1)
+	for n in range(NArms-1):
+		spineChain = Chain(N[1],currAtomType)
+		armChain = Chain(N[2], currAtomType+1)
+		newNode.add_child(spineChain)
+		newNode.add_child(armChain)
 
-	node2 = Node(1)
-	chain1.add_child(node2)
+		newNode = Node(currAtomType)
+		spineChain.add_child(newNode)
+		
+	armChain = Chain(N[2], currAtomType+1)
+	newNode.add_child(armChain)
+
+	endChain = Chain(N[0], currAtomType)
+	newNode.add_child(endChain)
 
 	print 'Make a ring polymer'
 	node0 = Node(1)
@@ -578,12 +605,12 @@ if __name__ == '__main__':
 	node0.add_child( Loop(loopList) )
 
 	box = Box([100,100,100], pointSpacing=2) #Initialize a 100x100x100 box
-	box.add_polymer(poly0, startPos=[-35,-35,-35]) #create that polymer one time in the box, starting at the position (-35,-35,-35)
-	box.add_polymer(poly1, startPos=[ 35, 35, 35]) 
+	box.add_polymer(poly0, startPos=[-35,0,0]) #create that polymer one time in the box, starting at the position (-35,-35,-35)
+	#box.add_polymer(poly1, startPos=[ 35, 35, 35]) 
 	box.add_polymer(poly2, startPos=[ 35,-35,-35])
 	box.add_polymer(poly3, startPos=[ 35, 35,-35])
-	box.add_solvents(100, 3) #generate solvents in the box
+	#box.add_solvents(100, 3) #generate solvents in the box
 
 	box.write_box('./polymer0.data')
 	import subprocess as prcs
-	simulate_str = prcs.check_output("./lmp_serial -sf omp -pk omp 4 -in polymer.in")
+	simulate_str = prcs.check_output("./other-scripts/lmp_serial -sf omp -pk omp 4 -in ./other-scripts/polymer.in")

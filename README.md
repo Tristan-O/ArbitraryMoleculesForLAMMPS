@@ -2,7 +2,7 @@
 
 These are tools I am developing for use in conjunction with LAMMPS. Polymer.py gives a user the ability to generate arbitrarily complex polymer structures and write those out to LAMMPS data files. This currently only has support for generating atoms and bonds, but I am planning to give it the ability to add angles, dihedrals and more soon. Simulation_Tools.py provides some tools for analyzing data output by LAMMPS and also contains some pre-defined polymer structures that may be useful for a user (currently beadspring, multiblock, spine and ring). Look in exampleUsage/ for an example of how to use simulationTools.py and Polymer.py to generate and analyze LAMMPS data, or continue reading.
 
-### How to use Polymer.py and Simulation_Tools.py
+### How to use Simulation_Tools.py and Polymer.py
 
 #### Simulation_Tools
 To get start you will want to import Simulation_Tools.py:
@@ -56,7 +56,7 @@ WIP - Analyzes an atom-style dump file and produces a histogram of the distances
 Polymer organizes your atoms/monomers/whatever in an object-oriented approach. The hierarchy is as follows:
 * Box
 * Polymer
-* Node, Chain, Loop, LoopSegment
+* Node, Chain, Loop
 
 The idea is that you can define a Box, and you can define a Polymer's structure by defining the relationships between Nodes, Chains, and LoopSegments. Then once those relationships have been defined (in a relatively simple and straightforward way), you can add that Polymer definition to your Box any number of times. Doing this is what gives atoms a spatial position in the box. Most cases will only need Nodes and Chains, but there is functionality to include polymers with closed-loops as well through objects called "Loop"s and "LoopSegment"s.
 
@@ -160,32 +160,26 @@ node0.add_child(loop0) #Finally assign the node from which this loop will be gen
 Throughout these examples, I have been using the following functions:
 ##### Box(boxDims, pointSpacing=0.5)
 Constructor of a Box object, this takes the dimensions of the box you will be working with as a list: [Lx, Ly, Lz]  will tell the box to span from -Lx/2:Lx/2, etc...
-pointSpacing is the approximate spacing between the atoms that you desire. I have found that 0.5 works well but if you want your atoms to start closer together or farther apart you may change that parameter.
+Box also keeps track of occupied points in a lattice, this is not really necessary but I am too lazy to change it right now. pointSpacing is how far apart these points are generated.
 
 ##### Box.define_atom_type(atomType, mass=1., diameter=1., density=1.)
 Define the parameters associated with the type of the atom - mass, diameter, and density
 
-##### Box.add_polymer(polymer, startPos=[0,0,0], minDistance=None)
-This function must be called on a box object. It takes a Polymer object to add to the box and a place to start that polymer at, and a minimum distance that the atoms must be spaced from each other, which will default to 0.5* the pointSpacing argument that was provided in the constructor of this Box.
+##### Box.add_polymer(polymer, startPos=None)
+This function must be called on a box object. It takes a Polymer object to add to the box and a place to start that polymer at (defaults to a random spot)
 
 ##### Box.add_solvents(numSolvents, solventType, minDistance=0.5)
+'''
+Removed
+'''
 This function allows you to add discrete individual atoms not bonded to any others into your box. It takes the number of solvents you wish to add and the type of atom you want to assign to them, as well as a minimum distance as Box.add_polymer() has. It generates a 3D lattice of points to place the solvent atoms on, with some random displacement to help with minimization.
 
 ##### Box.write_box(outputFileLoc)
 This function writes the box to a LAMMPS data file. This should only be done when all polymers/solvents have been added to it.
 
 
-##### Polymer(initAtomType)
-Constructor of a polymer, initializes a Polymer object with a single Node of the type provided by initAtomType.
-
-##### Polymer.add_chain(chainLen, atomType)
-Adds a chain to this Polymer of length chainLen and all of the atoms it contains will have type atomType. Returns a Chain.
-
-##### Polymer.add_loop_segment(segLen, atomType, loop)
-Adds a loop segment belonging to the Loop "loop". Similar to Polymer.add_chain(), returns a LoopSegment.
-
-##### Polymer.add_node(atomType)
-Adds a Node to a polymer. Returns a Node.
+##### Polymer(Node)
+Constructor of a polymer, initializes a Polymer object with a single Node. Polymer can then be built from that Node.
 
 ##### Polymer.get_chain_by_id(chainID),
 ##### Polymer.get_node_by_id(nodeID)
