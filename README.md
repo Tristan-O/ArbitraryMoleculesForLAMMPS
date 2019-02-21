@@ -75,7 +75,12 @@ box.define_atom_type( 2 )
 box.write( 'polymer0.data' )
 ```
 
-Additionally, there is support for dihedrals and impropers. They work in exactly the same manner as angles (see ```mol.angle_atoms( ... )``` above) except that they call for four atoms instead of three. The order does matter for these atoms, unlike simple bonds.
+Additionally, there is support for dihedrals and impropers:
+```python
+Molecule.dihedral_atoms( dihedralType, atom1, atom2, atom3, atom4 )
+Molecule.improper_atoms( improperType, atom1, atom2, atom3, atom4 )
+```
+They work in exactly the same manner as angles (see ```mol.angle_atoms( ... )``` above) except that they call for four atoms instead of three. The order DOES matter for these atoms, unlike simple bonds.
 
 This was my reference for how a LAMMPS style input file is formatted:
 https://lammps.sandia.gov/doc/2001/data_format.html
