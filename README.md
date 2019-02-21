@@ -82,5 +82,20 @@ Molecule.improper_atoms( improperType, atom1, atom2, atom3, atom4 )
 ```
 They work in exactly the same manner as angles (see ```mol.angle_atoms( ... )``` above) except that they call for four atoms instead of three. The order DOES matter for these atoms, unlike simple bonds.
 
+#### debug
+There is one thing I mentioned above that I did not go over in How to use. This script can produce nice 3D plots for debugging if you are uncertain your molecule is begin defined correctly and don't want to go through the generate data file to check, however this vastly slows down the process of building the molecules. If you have matplotlib and are having no issues with Tkinter, you can use ```debug=True``` in the call to initialize the Box object to enaable these plots.
+
+### Additional Reference
 This was my reference for how a LAMMPS style input file is formatted:
 https://lammps.sandia.gov/doc/2001/data_format.html
+
+SMACOF and MDS are somewhat described here:
+https://en.wikipedia.org/wiki/Stress_majorization
+https://scikit-learn.org/stable/modules/generated/sklearn.manifold.MDS.html#sklearn.manifold.MDS
+
+Octree is here (see Quadtree, the 2D equivalent):
+http://gameprogrammingpatterns.com/spatial-partition.html
+
+And I stole the code for live plotting from:
+https://stackoverflow.com/questions/5179589/continuous-3d-plotting-i-e-figure-update-using-python-matplotlib
+https://stackoverflow.com/questions/44881885/python-draw-3d-cube
