@@ -35,7 +35,8 @@ mol.bond_atoms( atom2, atom3 ) #bond type is determined by what atom types are b
 mol.bond_atoms( atom3, atom1 )
 
 angleType = 1
-mol.angle_atoms( angleType, atom1, atom2, atom3 ) #this defines an angle. Here order is important, it is the same order that will be written to the input file.
+mol.angle_atoms( angleType, atom1, atom2, atom3 ) #this defines an angle. Here order is important, 
+                                     # it is the same order that will be written to the input file.
 ```
 
 Here we have defined a molecule to be a closed loop of three atoms, and it will have an angle as well of angle type 1.
@@ -53,3 +54,28 @@ box.define_atom_type( atomType, diameter=1, mass=1, density=1 ) #you MUST define
 outfile = 'polymer0.data'
 box.write( outfile )
 ```
+
+This will create your input file. For more complicated molecules it does not get much harder. For example, lets define a 'ring molecule' of 20 atoms (a chain of atoms bonded to create a circular shape):
+
+```python
+mol = m.Molecule()
+a_previous = mol.add_atom( 1 )  #first atom added to our molecule
+for i in range( 20 ):  #iterate 20 times
+	a_current = mol.add_atom( 2 )  #add another atoms
+	mol.bond_atoms( a_previous,a_current )  #bond that atom to the previous atom
+	a_previous = a_current  #define the most recent atom to be now previous
+mol.bond_atoms( a_previous, a_1 ) #finally, close the loop on our ring.
+
+#now add an instance of this molecule to our box 8 times:
+for _ in range(8):
+  box.add_molecule( mol ) #remember Box.add_molecule( mol ) creates a clone of mol before adding it
+
+box.define_atom_type( 1 ) #defined to have default values for diameter, mass and density
+box.define_atom_type( 2 )
+box.write( 'polymer0.data' )
+```
+
+Additionally, there is support for dihedrals and impropers. They work in exactly the same manner as angles (see ```mol.angle_atoms( ... )``` above) except that they call for four atoms instead of three. The order does matter for these atoms, unlike simple bonds.
+
+This was my reference for how a LAMMPS style input file is formatted:
+https://lammps.sandia.gov/doc/2001/data_format.html
