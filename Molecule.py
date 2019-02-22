@@ -88,9 +88,9 @@ class plot3dClass( object ):
 class Box:
 	#This can keep track of polymers, atomIDs, etc.
 	def __init__(self, boxDims, debug = False):
-		self.boxDims = np.copy(boxDims)
-		for i in range(3):
-			self.boxDims[i] = self.boxDims[i] / 2.
+		# self.boxDims = np.copy(boxDims)
+		# for i in range(3):
+		self.boxDims = np.array(boxDims) / 2.
 
 		self.moleculeList = []
 		self.atomTypes = {}
@@ -541,4 +541,4 @@ if __name__ == '__main__':
 	box.define_atom_type(2,diameter=1)
 	box.define_atom_type(3,diameter=10)
 	box.define_atom_type(4)
-	box.write_box('polymer0.data')
+	box.write_box('LAMMPS_sim.data')
