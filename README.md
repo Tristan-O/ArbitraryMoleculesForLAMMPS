@@ -19,20 +19,21 @@ Using Multidimensional Scaling techniques and some elementary graph theory, any 
 There are two objects you must initialize first:
 ```python
 import Molecule as m
-box = m.Box([Lx,Ly,Lz])
+box = m.Box([Lx,Ly,Lz]) #Lx,Ly,Lz are the box dimensions in each cartesian dimension
 mol = m.Molecule()
 ```
 
 From there, you can define the structure of the molecule m:
 ```python
 atomType = 1
+bondType = 1
 atom1 = mol.add_atom( atomType ) #the argument here is atom type
 atom2 = mol.add_atom( atomType )
 atom3 = mol.add_atom( atomType )
 
-mol.bond_atoms( atom1, atom2 ) #bond_atoms does not care whhich atoms you pass in first and second
-mol.bond_atoms( atom2, atom3 ) #bond type is determined by what atom types are bonded
-mol.bond_atoms( atom3, atom1 )
+mol.bond_atoms( bondType, atom1, atom2 ) #bond_atoms does not care which atoms you pass in first and second
+mol.bond_atoms( bondType, atom2, atom3 )
+mol.bond_atoms( bondType, atom3, atom1 )
 
 angleType = 1
 mol.angle_atoms( angleType, atom1, atom2, atom3 ) #this defines an angle. Here order is important, 
@@ -41,7 +42,7 @@ mol.angle_atoms( angleType, atom1, atom2, atom3 ) #this defines an angle. Here o
 
 Here we have defined a molecule to be a closed loop of three atoms, and it will have an angle as well of angle type 1.
 
-To actually construct the box now that we have our molecule well-defined:
+To actually construct the data file now that we have our molecule well-defined:
 
 ```python
 box.add_molecule( mol ) #this function clones mol, so if I wanted more than one
@@ -60,11 +61,12 @@ This will create your input file. For more complicated molecules it does not get
 ```python
 mol = m.Molecule()
 a_previous = mol.add_atom( 1 )  #first atom added to our molecule
+a_1 = a_previous #keep track of our first atom in a_1
 for i in range( 20 ):  #iterate 20 times
 	a_current = mol.add_atom( 2 )  #add another atoms
-	mol.bond_atoms( a_previous,a_current )  #bond that atom to the previous atom
+	mol.bond_atoms( 1, a_previous,a_current )  #bond that atom to the previous atom
 	a_previous = a_current  #define the most recent atom to be now previous
-mol.bond_atoms( a_previous, a_1 ) #finally, close the loop on our ring.
+mol.bond_atoms( 1, a_previous, a_1 ) #finally, close the loop on our ring.
 
 #now add an instance of this molecule to our box 8 times:
 for _ in range(8):
@@ -82,8 +84,31 @@ Molecule.improper_atoms( improperType, atom1, atom2, atom3, atom4 )
 ```
 They work in exactly the same manner as angles (see ```mol.angle_atoms( ... )``` above) except that they call for four atoms instead of three. The order DOES matter for these atoms, unlike simple bonds.
 
+Finally, you can define your own sections (say, Bond Coeffs)
+
+```python
+...
+
+header = 'Bond Coeffs'
+line1 = [1, 0, 4]
+line2 = [2, 0, 5]
+box.define_other_section( header,line1 )
+box.define_other_section( header,line2 )
+
+...
+```
+
+Which will append a section:
+```
+Bond Coeffs
+
+1 0 4
+2 0 5
+```
+To your file
+
 #### debug
-There is one thing I mentioned above that I did not go over in How to use. This script can produce nice 3D plots for debugging if you are uncertain your molecule is begin defined correctly and don't want to go through the generate data file to check, however this vastly slows down the process of building the molecules. If you have matplotlib and are having no issues with Tkinter, you can use ```debug=True``` in the call to initialize the Box object to enaable these plots.
+There is one thing I mentioned above that I did not go over in How to use. This script can produce nice 3D plots for debugging if you are uncertain your molecule is begin defined correctly and don't want to go through the generate data file to check, however this vastly slows down the process of building the molecules. If you have matplotlib and are having no issues with Tkinter, you can use ```debug=True``` in the call to initialize the Box object to enable these plots.
 
 ### Additional Reference
 This was my reference for how a LAMMPS style input file is formatted:
