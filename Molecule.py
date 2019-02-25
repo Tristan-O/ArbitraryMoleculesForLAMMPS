@@ -16,35 +16,43 @@ except Exception as e:
 
 class plot3dClass( object ):
 
-    def __init__( self, dims ):
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot( 111, projection='3d' )
-        self.ax.set_xlim3d( -dims[0], dims[0] )
-        self.ax.set_ylim3d( -dims[1], dims[1] )
-        self.ax.set_zlim3d( -dims[2], dims[2] )
+	def __init__( self, dims ):
+		# self.plot = self.ax.scatter( 
+		#     [0],[0],[0], 
+		#     cmap=cm.jet, linewidth=0, antialiased=False )
+		# # plt.draw() maybe you want to see this frame?
+		matplotlib.interactive(True)
+		self.points = []
+		self.cube_drawn = False
+		self.points_drawn = False
+		self.dims = dims
 
-        self.plot = self.ax.scatter( 
-            [0],[0],[0], 
-            cmap=cm.jet, linewidth=0, antialiased=False )
-        # plt.draw() maybe you want to see this frame?
-        matplotlib.interactive(True)
-        self.points = []
+	def draw_now( self, point=None):
+		if self.points_drawn == False:
+			self.fig = plt.figure()
+			self.ax = self.fig.add_subplot( 111, projection='3d' )
+			self.ax.set_xlim3d( -self.dims[0], self.dims[0] )
+			self.ax.set_ylim3d( -self.dims[1], self.dims[1] )
+			self.ax.set_zlim3d( -self.dims[2], self.dims[2] )
+			self.points_drawn = True
+		if not (point is None):
+			self.points.append(point)
+		# try:
+			# self.plot.remove()
+		# except AttributeError:
+			# pass
+		self.plot = self.ax.scatter( 
+			np.transpose(self.points)[0], np.transpose(self.points)[1], np.transpose(self.points)[2],
+			c=[0,0,0], linewidth=0, antialiased=False )
+		plt.draw()  
+		# self.fig.canvas.flush_events() # redraw the canvas
+		plt.pause(.0001)
 
-        self.fig_cube = plt.figure()
-        self.ax_cube = self.fig_cube.add_subplot(111, projection='3d')
-
-    def drawNow( self, point=None):
-    	if not (point is None):
-	    	self.points.append(point)
-        self.plot.remove()
-        self.plot = self.ax.scatter( 
-            np.transpose(self.points)[0], np.transpose(self.points)[1], np.transpose(self.points)[2],
-            c=[0,0,0], linewidth=0, antialiased=False )
-        plt.draw()  
-        self.fig.canvas.flush_events() # redraw the canvas
-        plt.pause(.0001)
-        
-    def plot_cube(self, cube_definition):
+	def plot_cube(self, cube_definition):
+		if self.cube_drawn == False:
+			self.fig_cube = plt.figure()
+			self.ax_cube = self.fig_cube.add_subplot(111, projection='3d')
+			self.cube_drawn = True
 		cube_definition_array = [
 			np.array(list(item))
 			for item in cube_definition
@@ -313,32 +321,39 @@ class Box:
 		self._partition()
 		# build polymer using MDS
 		for m in self.moleculeList:
-			m.determine_dissimilarity(self.atomTypes)
-			mds = manifold.MDS(n_components=3, max_iter=30000, eps=1e-9, dissimilarity="precomputed", n_jobs=1)
-			pos = mds.fit(m.dissimilarity).embedding_
-
-			# find box enclosing all points
-			xMax = max(pnt[0] for pnt in pos)
-			yMax = max(pnt[1] for pnt in pos)
-			zMax = max(pnt[2] for pnt in pos)
-			xMin = min(pnt[0] for pnt in pos)
-			yMin = min(pnt[1] for pnt in pos)
-			zMin = min(pnt[2] for pnt in pos)
-			corner1 = np.array([xMin,yMin,zMin])
-			corner2 = np.array([xMax,yMax,zMax])
-			
-			for i,pnt in enumerate(pos):
-				#move points to be within unit cube [0,1]^3
-				pnt -= corner1
-				pnt /= (corner2-corner1)
-
-				#translate point to partitioned volume
-				pnt *= (m.corner2-m.corner1)
-				pnt += m.corner1
-
-				m.atomList[i].pos = np.copy(pnt)
+			if len(m.atomList) == 0:
+				continue
+			elif len(m.atomList) == 1:
+				m.atomList[0].pos = m.corner1 + (m.corner2 - m.corner1) / 2.
 				if self.debug:
-					self.interactivePlotter.drawNow(np.copy(pnt))
+					self.interactivePlotter.draw_now(np.copy(m.atomList[0].pos))
+			else:
+				m.determine_dissimilarity(self.atomTypes)
+				mds = manifold.MDS(n_components=3, max_iter=30000, eps=1e-9, dissimilarity="precomputed", n_jobs=1)
+				pos = mds.fit(m.dissimilarity).embedding_
+
+				# find box enclosing all points
+				xMax = max(pnt[0] for pnt in pos)
+				yMax = max(pnt[1] for pnt in pos)
+				zMax = max(pnt[2] for pnt in pos)
+				xMin = min(pnt[0] for pnt in pos)
+				yMin = min(pnt[1] for pnt in pos)
+				zMin = min(pnt[2] for pnt in pos)
+				corner1 = np.array([xMin,yMin,zMin])
+				corner2 = np.array([xMax,yMax,zMax])
+				
+				for i,pnt in enumerate(pos):
+					#move points to be within unit cube [0,1]^3
+					pnt -= corner1
+					pnt /= (corner2-corner1)
+
+					#translate point to partitioned volume
+					pnt *= (m.corner2-m.corner1)
+					pnt += m.corner1
+
+					m.atomList[i].pos = np.copy(pnt)
+					if self.debug:
+						self.interactivePlotter.draw_now(np.copy(pnt))
 
 
 class Molecule:
