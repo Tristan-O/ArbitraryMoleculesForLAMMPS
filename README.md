@@ -129,7 +129,7 @@ https://stackoverflow.com/questions/44881885/python-draw-3d-cube
 ```python
 class Box
 	__init__(boxDims, debug=False)
-    define_atom_type(atomType, mass=1., diameter=1., density=1.)
+	define_atom_type(atomType, mass=1., diameter=1., density=1.)
 	define_other_section(header, line)
 	add_molecule(m)
 	write_box(outputFileLoc)
