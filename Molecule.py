@@ -117,26 +117,6 @@ class Box:
 		self.atomTypes[atomType] = {'mass':mass, 'diameter':diameter, 'density':density}
 		return	
 
-	# def define_bond_type(self, bondType, params):
-	# 	bondType = int(bondType)
-	# 	self.bondTypes[bondType] = params[:]
-	# 	return
-
-	# def define_angle_type(self, angleType, params):
-	# 	angleType = int(angleType)
-	# 	self.angleTypes[angleType] = params[:]
-	# 	return
-
-	# def define_dihedral_type(self, dihedralType, params):
-	# 	dihedralType = int(dihedralType)
-	# 	self.dihedralTypes[dihedralType] = params[:]
-	# 	return	
-		
-	# def define_bond_type(self, improperType, params):
-	# 	improperType = int(improperType)
-	# 	self.improperTypes[improperType] = params[:]
-	# 	return	
-
 	def define_other_section(self, header, line):
 		''' '''
 		if header not in self.otherSections.keys():

@@ -124,3 +124,21 @@ http://gameprogrammingpatterns.com/spatial-partition.html
 And I stole the code for live plotting from:
 https://stackoverflow.com/questions/5179589/continuous-3d-plotting-i-e-figure-update-using-python-matplotlib
 https://stackoverflow.com/questions/44881885/python-draw-3d-cube
+
+### All User Functions
+```python
+class Box
+	__init__(boxDims, debug=False)
+    define_atom_type(atomType, mass=1., diameter=1., density=1.)
+	define_other_section(header, line)
+	add_molecule(m)
+	write_box(outputFileLoc)
+
+class Molecule
+	__init__()
+	add_atom(atomType)
+	bond_atoms(bondType, atom1, atom2)
+	angle_atoms(angleType, atom1, atom2, atom3)
+	dihedral_atoms(dihedralType, atom1, atom2, atom3, atom4)
+	improper_atoms(improperType, atom1, atom2, atom3, atom4)
+```
