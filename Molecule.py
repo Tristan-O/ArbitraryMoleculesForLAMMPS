@@ -101,7 +101,12 @@ class Box:
 		self.boxDims = np.array(boxDims) / 2.
 
 		self.moleculeList = []
+		self.otherSections = {}
 		self.atomTypes = {}
+		# self.bondTypes = {}
+		# self.angleTypes = {}
+		# self.dihedralTypes = {}
+		# self.improperTypes = {}
 
 		self.debug = debug
 		if self.debug:
@@ -111,7 +116,34 @@ class Box:
 		atomType = int(atomType)
 		self.atomTypes[atomType] = {'mass':mass, 'diameter':diameter, 'density':density}
 		return	
+
+	# def define_bond_type(self, bondType, params):
+	# 	bondType = int(bondType)
+	# 	self.bondTypes[bondType] = params[:]
+	# 	return
+
+	# def define_angle_type(self, angleType, params):
+	# 	angleType = int(angleType)
+	# 	self.angleTypes[angleType] = params[:]
+	# 	return
+
+	# def define_dihedral_type(self, dihedralType, params):
+	# 	dihedralType = int(dihedralType)
+	# 	self.dihedralTypes[dihedralType] = params[:]
+	# 	return	
 		
+	# def define_bond_type(self, improperType, params):
+	# 	improperType = int(improperType)
+	# 	self.improperTypes[improperType] = params[:]
+	# 	return	
+
+	def define_other_section(self, header, line):
+		''' '''
+		if header not in self.otherSections.keys():
+			self.otherSections[header] = []
+		self.otherSections[header].append(line)
+		return
+
 	def add_molecule(self, m):
 		'''Add a molecule to a box. This clones the molecule object, so one molecule object can be added several times.'''
 		#Objects are pass by reference, make clone
@@ -213,19 +245,10 @@ class Box:
 				f.write("\nBonds\n")
 				f.write("\n")
 
-				bondTypes.sort()
-				bondDict = {}
-				
-				for i,bondType_ in enumerate(bondTypes):
-					bondDict[bondType_] = i+1
-
 				for i,bond in enumerate(bondList):
-					f.write("%i " % (i+1))
-					f.write("%i " % bondDict[bond.bondType])
-					f.write("%i %i\n" % (bond.atoms[0].atomID, bond.atoms[1].atomID)) 
-
-				print "Bond types and their corresponding atom type definitions:"
-				print bondDict
+					f.write("%i " % (i+1)) # bond ID
+					f.write("%i " % bond.bondType) # bond type
+					f.write("%i %i\n" % tuple( sorted([bond.atoms[0].atomID, bond.atoms[1].atomID] )) ) # atom IDs 
 
 			# ANGLES: ******************************************************************************
 
@@ -236,7 +259,7 @@ class Box:
 				for i,ang in enumerate(angleList):
 					f.write("%i " % (i+1))
 					f.write("%i " % ang.angleType)
-					f.write( "%i %i %i\n" % (ang.atoms[0].atomID, ang.atoms[1].atomID, ang.atoms[2].atomID) ) 
+					f.write( "%i %i %i\n" % tuple( sorted([ang.atoms[0].atomID, ang.atoms[1].atomID, ang.atoms[2].atomID] ) ) )
 
 			# DIHEDRALS: ***************************************************************************
 
@@ -247,7 +270,7 @@ class Box:
 				for i,di in enumerate(dihedralList):
 					f.write("%i " % (i+1))
 					f.write("%i " % di.dihedralType)
-					f.write( "%i %i %i %i\n" % (di.atoms[0].atomID, di.atoms[1].atomID, di.atoms[2].atomID, di.atoms[3].atomID) ) 
+					f.write( "%i %i %i %i\n" % tuple( sorted([di.atoms[0].atomID, di.atoms[1].atomID, di.atoms[2].atomID, di.atoms[3].atomID])) ) 
 
 			# IMPROPERS: ***************************************************************************
 
@@ -258,7 +281,21 @@ class Box:
 				for i,imp in enumerate(improperList):
 					f.write("%i " % (i+1))
 					f.write("%i " % imp.improperType)
-					f.write( "%i %i %i %i\n" % (imp.atoms[0].atomID, imp.atoms[1].atomID, imp.atoms[2].atomID, imp.atoms[3].atomID) ) 
+					f.write( "%i %i %i %i\n" % tuple( sorted([imp.atoms[0].atomID, imp.atoms[1].atomID, imp.atoms[2].atomID, imp.atoms[3].atomID])))  
+
+			# OTHER SECTIONS **************************************************************************
+			
+			for header in self.otherSections.keys():
+				f.write( "\n{}\n".format( header ) )
+				f.write( "\n" )
+				for line in self.otherSections[header]:
+					for item in line:
+						#if an object is passed in, find all combinations
+						# if isinstance(item, Molecule.Atom) or isinstance(item, Molecule.Bond) or isinstance(item, Molecule.Angle) or isinstance(item, Molecule.Dihedral) or isinstance(item, Molecule.Improper):
+						# 	for clone in item.clones:	
+						f.write( str(item) )
+						f.write( ' ' )
+					f.write('\n')
 
 	def _partition(self):
 		class _volume:
@@ -359,31 +396,35 @@ class Box:
 class Molecule:
 
 	class Atom:
-		def __init__(self, atomType):
+		def __init__(self, atomType, atomNum):
 			self.atomType = atomType
 			self.bondedAtoms = []
 
-			self.atomNum = None
-			self.angleList = []
-			self.dihedralList = []
-			self.improperList = []
+			self.atomNum = atomNum
 			return
+		def clone(self, mClone):
+			mClone.add_atom( self.atomType )
+		def __str__(self):
+			return str( self.atomID )
 
 	class Bond:
-		def __init__(self, atom1, atom2):
+		def __init__(self, bondType, atom1, atom2):
 			if atom1 in atom2.bondedAtoms or atom2 in atom1.bondedAtoms:
 				raise ValueError('Bond already exists')
-			self.bondType = tuple(sorted([atom1.atomType, atom2.atomType]))
+			self.bondType = bondType
 			self.atoms = (atom1, atom2)
 			atom1.bondedAtoms.append(atom2)
 			atom2.bondedAtoms.append(atom1)
 			return
+		def clone(self, mClone):
+			atom1 = mClone.atomList[self.atoms[0].atomNum]
+			atom2 = mClone.atomList[self.atoms[1].atomNum]
+			mClone.bond_atoms(self.bondType, atom1, atom2)
 
 	class Angle:
 		def __init__(self, angleType, atom1, atom2, atom3):
 			self.angleType = angleType
 			self.atoms = [atom1, atom2, atom3]
-			atom1.angleList.append(self)
 		def clone(self, mClone):
 			atom1 = mClone.atomList[self.atoms[0].atomNum]
 			atom2 = mClone.atomList[self.atoms[1].atomNum]
@@ -394,7 +435,6 @@ class Molecule:
 		def __init__(self, dihedralType, atom1, atom2, atom3, atom4):
 			self.dihedralType = dihedralType
 			self.atoms = [atom1, atom2, atom3, atom4]
-			atom1.dihedralList.append(self)
 		def clone(self, mClone):
 			atom1 = mClone.atomList[self.atoms[0].atomNum]
 			atom2 = mClone.atomList[self.atoms[1].atomNum]
@@ -406,7 +446,6 @@ class Molecule:
 		def __init__(self, improperType, atom1, atom2, atom3, atom4):
 			self.improperType = improperType
 			self.atoms = [atom1, atom2, atom3, atom4]
-			atom1.improperList.append(self)
 		def clone(self, mClone):
 			atom1 = mClone.atomList[self.atoms[0].atomNum]
 			atom2 = mClone.atomList[self.atoms[1].atomNum]
@@ -424,18 +463,17 @@ class Molecule:
 		return
 
 	def add_atom(self, atomType):
-		atom = self.Atom(atomType)
+		atom = self.Atom(atomType, len(self.atomList) ) # do not need -1 in last argument
 		self.atomList.append( atom )
-		atom.atomNum = len(self.atomList)-1
 		return atom
 
-	def bond_atoms(self, atom1, atom2):
+	def bond_atoms(self, bondType, atom1, atom2):
 		if not (atom1 in self.atomList and atom2 in self.atomList):
 			raise ValueError('Attempted to bond atoms not defined within this molecule')
 		elif atom1 is atom2:
 			raise ValueError('Attemped to bond an atom to itself')
 		else:
-			self.bondList.append( self.Bond(atom1,atom2) )
+			self.bondList.append( self.Bond(bondType, atom1,atom2) )
 
 	def angle_atoms(self, angleType, atom1, atom2, atom3):#order matters!
 		self.angleList.append( self.Angle(angleType, atom1, atom2, atom3) )
@@ -489,15 +527,8 @@ class Molecule:
 
 	def clone(self):
 		m = Molecule()
-		for i,atom1 in enumerate(self.atomList):
-			a1 = m.add_atom( atom1.atomType )
-			for j,atom2 in enumerate(self.atomList[:i]):
-				if atom2 in atom1.bondedAtoms:
-					m.bond_atoms(a1, m.atomList[j])
-
-		for x in self.angleList + self.dihedralList + self.improperList:
-			x.clone(m)
-
+		for x in self.atomList + self.bondList + self.angleList + self.dihedralList + self.improperList:
+			x.clone( m )
 		return m
 
 	def effective_radius(self, atomTypeInfo):

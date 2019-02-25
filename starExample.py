@@ -11,12 +11,20 @@ center_atom = mol.add_atom( center_atom_type )
 N_arms = 10 # 10 arms on our star
 arm_length = 5 # 5 atoms on each arm, not including central node
 arm_atom_type = 2
+center_bond_type = 1
+arm_bond_type = 2
 
 for _ in range(N_arms): # loop over number of arms
 	prev_atom = center_atom # keep track of previous atom
 	for j in range(arm_length): # loop over the atoms in a single arm
 		new_atom = mol.add_atom( arm_atom_type ) # add a new atom along this arm
-		mol.bond_atoms( prev_atom, new_atom ) # bond the previously added atom and the new atom
+
+		# bond the previously added atom and the new atom
+		# bond type matters
+		if j == 0:
+			mol.bond_atoms( center_bond_type, prev_atom, new_atom )
+		else:
+			mol.bond_atoms( arm_bond_type, prev_atom, new_atom )
 		prev_atom = new_atom # set the most recently added atom to be the previously added one
 							 # in preparation for the next iteration of the loop
 
