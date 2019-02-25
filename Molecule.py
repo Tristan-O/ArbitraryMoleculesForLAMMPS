@@ -259,7 +259,7 @@ class Box:
 				for i,ang in enumerate(angleList):
 					f.write("%i " % (i+1))
 					f.write("%i " % ang.angleType)
-					f.write( "%i %i %i\n" % tuple( sorted([ang.atoms[0].atomID, ang.atoms[1].atomID, ang.atoms[2].atomID] ) ) )
+					f.write( "%i %i %i\n" % (ang.atoms[0].atomID, ang.atoms[1].atomID, ang.atoms[2].atomID ) ) 
 
 			# DIHEDRALS: ***************************************************************************
 
@@ -270,7 +270,7 @@ class Box:
 				for i,di in enumerate(dihedralList):
 					f.write("%i " % (i+1))
 					f.write("%i " % di.dihedralType)
-					f.write( "%i %i %i %i\n" % tuple( sorted([di.atoms[0].atomID, di.atoms[1].atomID, di.atoms[2].atomID, di.atoms[3].atomID])) ) 
+					f.write( "%i %i %i %i\n" % (di.atoms[0].atomID, di.atoms[1].atomID, di.atoms[2].atomID, di.atoms[3].atomID) )
 
 			# IMPROPERS: ***************************************************************************
 
@@ -281,7 +281,7 @@ class Box:
 				for i,imp in enumerate(improperList):
 					f.write("%i " % (i+1))
 					f.write("%i " % imp.improperType)
-					f.write( "%i %i %i %i\n" % tuple( sorted([imp.atoms[0].atomID, imp.atoms[1].atomID, imp.atoms[2].atomID, imp.atoms[3].atomID])))  
+					f.write( "%i %i %i %i\n" % ( imp.atoms[0].atomID, imp.atoms[1].atomID, imp.atoms[2].atomID, imp.atoms[3].atomID) )  
 
 			# OTHER SECTIONS **************************************************************************
 			
