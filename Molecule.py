@@ -10,9 +10,9 @@ try:
 	from matplotlib.ticker import LinearLocator, FixedLocator, FormatStrFormatter
 	import matplotlib
 except Exception as e:
-	print 'Could not import matplotlib (using Tkinter). Do not use debug argument in \'Box\' Initialization or this will fail'
-	print e
-	print 'Continuing...'
+	print('Could not import matplotlib (using Tkinter). Do not use debug argument in \'Box\' Initialization or this will fail')
+	print(e)
+	print('Continuing...')
 
 class plot3dClass( object ):
 
@@ -95,22 +95,21 @@ class plot3dClass( object ):
 
 class Box:
 	#This can keep track of polymers, atomIDs, etc.
-	def __init__(self, boxDims, debug = False):
-		# self.boxDims = np.copy(boxDims)
-		# for i in range(3):
-		self.boxDims = np.array(boxDims) / 2.
+	def __init__(self, box_dims, num_threads = 1, verbose=True, debug = False):
+		self.boxDims = np.array(box_dims) / 2.
 
 		self.moleculeList = []
 		self.otherSections = {}
 		self.atomTypes = {}
-		# self.bondTypes = {}
-		# self.angleTypes = {}
-		# self.dihedralTypes = {}
-		# self.improperTypes = {}
 
 		self.debug = debug
+		self.verbose = verbose
 		if self.debug:
 			self.interactivePlotter = plot3dClass(np.copy(self.boxDims))
+
+				#arbitrary definition of randomness assignment to positions:
+		self.random_offset = 1#self.boxDims/sum(self.boxDims)
+		self.num_threads = num_threads
 
 	def define_atom_type(self, atomType, mass=1., diameter=1., density=1.):
 		atomType = int(atomType)
@@ -124,10 +123,11 @@ class Box:
 		self.otherSections[header].append(line)
 		return
 
-	def add_molecule(self, m):
+	def add_molecule(self, m, max_len = -1):
 		'''Add a molecule to a box. This clones the molecule object, so one molecule object can be added several times.'''
 		#Objects are pass by reference, make clone
-		mClone = m.clone()
+		mClone = m.clone(self.atomTypes)
+		mClone.max_len = max_len
 		self.moleculeList.append(mClone)
 
 	def write_box(self, outputFileLoc):
@@ -277,101 +277,87 @@ class Box:
 						f.write( ' ' )
 					f.write('\n')
 
-	def _partition(self):
-		class _volume:
-			def __init__(self,molList, box, corner1, corner2, depth):
-				self.molList = molList
-				self.parentbox = box
-				self.corner1 = np.array(corner1)
-				self.corner2 = np.array(corner2)
-				if self.parentbox.debug:
-					corner3 = (self.corner2-self.corner1)*np.array([1,0,0]) + self.corner1
-					corner4 = (self.corner2-self.corner1)*np.array([0,1,0]) + self.corner1
-					corner5 = (self.corner2-self.corner1)*np.array([0,0,1]) + self.corner1
-					self.parentbox.interactivePlotter.plot_cube([corner1,corner3,corner4,corner5])
-					# plt.pause(.05)
-				
-				self.depth = depth
-				volumes = np.array(list((x.effective_radius(self.parentbox.atomTypes) for x in self.molList)))
-				volumes = (2**3)*volumes*volumes*volumes
-				#have the "box volumes" of polymers, scale to fit the box exactly:
-				#"normalize" volumes to sum to 1, working with unit volume is easier, stretch after
-				if len(self.molList) == 1:
-					#gone as far as I can with partitioning
-					self.molList[0].corner1 = self.corner1*(2*0.9*self.parentbox.boxDims) - 0.9*self.parentbox.boxDims
-					self.molList[0].corner2 = self.corner2*(2*0.9*self.parentbox.boxDims) - 0.9*self.parentbox.boxDims
-					return
-				depth = self.depth + 1
-				for i,part in enumerate(self._partition_list()):
-					corner1 = self.corner1 + 0.5**depth*np.array([i%2, (i//2)%2, (i//4)%2])
-					corner2 = self.corner2 + 0.5*(self.corner1-self.corner2) + 0.5**depth*np.array([i%2, (i//2)%2, (i//4)%2])
-
-					_volume( part, self.parentbox, corner1, corner2, depth)
-			def _partition_list(self):
-				#partition list into 8 parts of near equal volumes
-				if len(self.molList)<=8:
-					return ([x] for x in self.molList)
-
-				molList = []
-				for i,m in enumerate(self.molList):
-					molList.append( (self.volumes[i],m) )
-				molList.sort()
-
-				partitions = [{'volume':0, 'a':[]},{'volume':0, 'a':[]},{'volume':0, 'a':[]},{'volume':0, 'a':[]},{'volume':0, 'a':[]},{'volume':0, 'a':[]},{'volume':0, 'a':[]},{'volume':0, 'a':[]}]
-				while molList:
-					#sort partitions by volume, smallest will be at front
-					partitions.sort(key=lambda a: a['volume'])
-					partitions[0]['a'].append(molList[0][1])
-					#ugly but should work, first element in partitions is min, 'a' to ref list of polys, [-1] to ref most recently added (vol,poly) tuple, [0] to get vol
-					partitions[0]['volume'] += molList[0][0]
-					polyList = polyList[1:]
-
-				temp = []
-				for d in partitions:
-					temp.append( d['a'] )
-				return temp
-
-		self.moleculeList.sort(key=lambda x: x.effective_radius(self.atomTypes))
-		_volume( self.moleculeList, self, [0,0,0],[1,1,1], 0)
-
 	def _generate(self):
-		self._partition()
 		# build polymer using MDS
-		for m in self.moleculeList:
+		for m_i,m in enumerate(self.moleculeList):
+			m.center = np.array([0.,0.,0.])
+			m.radius = 0
+
 			if len(m.atomList) == 0:
 				continue
 			elif len(m.atomList) == 1:
-				m.atomList[0].pos = m.corner1 + (m.corner2 - m.corner1) / 2.
-				if self.debug:
-					self.interactivePlotter.draw_now(np.copy(m.atomList[0].pos))
+				m.atomList[0].pos = np.array([0.,0.,0.])
+				m.radius = self.atomTypes[m.atomList[0].atomType]['diameter']/2.
+				
 			else:
 				m.determine_dissimilarity(self.atomTypes)
-				mds = manifold.MDS(n_components=3, max_iter=30000, eps=1e-9, dissimilarity="precomputed", n_jobs=1)
+				mds = manifold.MDS(n_components=3, max_iter=30000, eps=1e-9, dissimilarity="precomputed", n_jobs=self.num_threads)
 				pos = mds.fit(m.dissimilarity).embedding_
 
 				# find box enclosing all points
-				xMax = max(pnt[0] for pnt in pos)
-				yMax = max(pnt[1] for pnt in pos)
-				zMax = max(pnt[2] for pnt in pos)
-				xMin = min(pnt[0] for pnt in pos)
-				yMin = min(pnt[1] for pnt in pos)
-				zMin = min(pnt[2] for pnt in pos)
-				corner1 = np.array([xMin,yMin,zMin])
-				corner2 = np.array([xMax,yMax,zMax])
 				
 				for i,pnt in enumerate(pos):
 					#move points to be within unit cube [0,1]^3
-					pnt -= corner1
-					pnt /= (corner2-corner1)
-
-					#translate point to partitioned volume
-					pnt *= (m.corner2-m.corner1)
-					pnt += m.corner1
-
 					m.atomList[i].pos = np.copy(pnt)
-					if self.debug:
-						self.interactivePlotter.draw_now(np.copy(pnt))
+					# if self.debug:
+						# self.interactivePlotter.draw_now(np.copy(pnt))
+					m.center += np.copy(pnt)/len(m.atomList)
+				for i,pnt in enumerate(pos):
+					if m.radius < LA.norm(m.center-pnt)+self.atomTypes[m.atomList[i].atomType]['diameter']/2.:
+						m.radius = LA.norm(m.center-pnt)+self.atomTypes[m.atomList[i].atomType]['diameter']/2.
+					m.atomList[i].pos -= m.center
+			m.center = np.array([0.,0.,0.])
+			if self.verbose:
+				print('Molecule {} atoms arranged via MDS'.format(m_i))
+		#molecules have been built, but not placed into box
+		# Strategy: Warped Lattice Technique
+		#   Build linear lattice and associate molecules with points on it
+		#   such that there are approximately the same number of lattice
+		#   points as there are molecules. Then use MDS again, taking distance
+		#   between two molecules to be the either the lattice distance or the
+		#   minimum distance (the sum of the molecule's radii)
 
+		#building lattice:
+		i = 0
+		box_vol = 8.*self.boxDims[0]*self.boxDims[1]*self.boxDims[2]
+		vol_per_point = box_vol / len(self.moleculeList)
+		linear_space_per_point = vol_per_point**(1./3.)
+
+		np.random.shuffle(self.moleculeList)
+		for x in np.arange(-self.boxDims[0], self.boxDims[0],linear_space_per_point):
+			for y in np.arange(-self.boxDims[1], self.boxDims[1], linear_space_per_point):
+				for z in np.arange(-self.boxDims[2], self.boxDims[2], linear_space_per_point):
+					if i == len(self.moleculeList):
+						break
+					self.moleculeList[i].latticePosition = np.array([x,y,z])
+					i += 1
+		dissimilarity = np.zeros( (len(self.moleculeList), len(self.moleculeList)) )
+
+		#fit molecules into box:
+		for i1,m1 in enumerate(self.moleculeList):
+			for i2,m2 in enumerate(self.moleculeList):
+				if m1 is m2:
+					dissimilarity[i1,i2] = 0.
+				else:
+					dissimilarity[i1,i2] = max( m1.radius+m2.radius, LA.norm(m1.latticePosition-m2.latticePosition) )
+		mds = manifold.MDS(n_components=3, max_iter=30000, eps=1e-9, dissimilarity="precomputed", n_jobs=1)
+		pos = mds.fit(dissimilarity).embedding_
+		for i,m in enumerate(self.moleculeList):
+			for a in m.atomList:
+				m.center = pos[i]
+				a.pos += pos[i] + self.random_offset*np.random.rand(3)
+
+				for j,_ in enumerate(a.pos):
+					while not (-self.boxDims[j] < a.pos[j] < self.boxDims[j]):
+						if a.pos[j] < -self.boxDims[j]:
+							a.pos[j] += 2*self.boxDims[j]
+						elif a.pos[j] > self.boxDims[j]:
+							a.pos[j] -= 2*self.boxDims[j]
+					 
+				if self.debug:
+					self.interactivePlotter.draw_now( np.copy(a.pos) )
+		if self.verbose:
+			print('Molecules placed in box.')
 
 class Molecule:
 
@@ -439,12 +425,15 @@ class Molecule:
 		self.angleList = []
 		self.dihedralList = []
 		self.improperList = []
-		self.netradius = None
+		self.dissimilarity = None
+		self.minLenMax = 3
 		return
 
 	def add_atom(self, atomType):
 		atom = self.Atom(atomType, len(self.atomList) ) # do not need -1 in last argument
 		self.atomList.append( atom )
+		if self.dissimilarity is not None:
+			self.dissimilarity = None
 		return atom
 
 	def bond_atoms(self, bondType, atom1, atom2):
@@ -454,18 +443,23 @@ class Molecule:
 			raise ValueError('Attemped to bond an atom to itself')
 		else:
 			self.bondList.append( self.Bond(bondType, atom1,atom2) )
+		if self.dissimilarity is not None:
+			self.dissimilarity = None
 
 	def angle_atoms(self, angleType, atom1, atom2, atom3):#order matters!
 		self.angleList.append( self.Angle(angleType, atom1, atom2, atom3) )
-		return
+		if self.dissimilarity is not None:
+			self.dissimilarity = None
 
 	def dihedral_atoms(self, dihedralType, atom1, atom2, atom3, atom4):#order matters!
 		self.dihedralList.append( self.Dihedral(dihedralType, atom1, atom2, atom3, atom4) )
-		return
+		if self.dissimilarity is not None:
+			self.dissimilarity = None
 
 	def improper_atoms(self, improperType, atom1, atom2, atom3, atom4):#order matters!
 		self.improperList.append( self.Improper(improperType, atom1, atom2, atom3, atom4) )
-		return
+		if self.dissimilarity is not None:
+			self.dissimilarity = None
 
 	def define_atoms(self,atomTypeInfo):
 		#expect atomTypeInfo to be dict with keys atomType, of dicts with keys 'diameter', 'mass', 'density'
@@ -476,24 +470,29 @@ class Molecule:
 		self.define_atoms(atomTypeInfo)
 		self.dissimilarity = np.zeros( (len(self.atomList), len(self.atomList)) )
 		for i,a1 in enumerate(self.atomList):
-			for j,a2 in enumerate(self.atomList):
+			for j,a2 in enumerate(self.atomList[i:]):
+				j+=i
 				self.dissimilarity[i,j] = self.find_shortest_path(a1,a2)
 				self.dissimilarity[j,i] = self.dissimilarity[i,j]
-
+		for i,row in enumerate(self.dissimilarity):
+			for j,val in enumerate(row):
+				if val < 0:
+					val = np.max(self.dissimilarity) + (self.atomList[i].radius + self.atomList[j].radius)*(np.random.rand(1)*0.5 + 1)
 	def find_shortest_path(self,a1,a2):
 		#take shortest path and return length, length is adjusted for atom radii
 		paths = self.find_all_paths(a1,a2)
 		minLen = -1
 		for p in paths:
-			pathLength = sum(2*x.radius for x in p) - p[0].radius - p[-1].radius
-			if pathLength < minLen or minLen < 0:
-				minLen = pathLength
+			if paths[-1] is a2: #if this path actually goes all the way to a2, because of max_len this may not be satisfied 
+				pathLength = sum(2*x.radius for x in p) - p[0].radius - p[-1].radius
+				if pathLength < minLen or minLen < 0:
+					minLen = pathLength
 		return minLen
 
 	def find_all_paths(self, a1,a2, path = []):
 		#find all paths from a1 to a2
 		path = path + [a1]
-		if a1 == a2:
+		if a1 == a2 or ( len(path) >= self.max_len and self.max_len > 0 ):
 		    return [path]
 		if a1 not in self.atomList:
 		    return []
@@ -505,22 +504,11 @@ class Molecule:
 		            paths.append(p)
 		return paths
 
-	def clone(self):
+	def clone(self, atomTypeInfo):
 		m = Molecule()
 		for x in self.atomList + self.bondList + self.angleList + self.dihedralList + self.improperList:
 			x.clone( m )
 		return m
-
-	def effective_radius(self, atomTypeInfo):
-		self.define_atoms(atomTypeInfo)
-		if self.netradius is None:
-			volume = 0
-			for atom in self.atomList:
-				volume += (atom.radius)**3.
-			self.netradius = volume ** (1./3.) / 0.64
-			# factor of 1/0.64 comes from the density of randomly packing spheres
-			# https://en.wikipedia.org/wiki/Sphere_packing
-		return self.netradius
 
 
 if __name__ == '__main__':
